@@ -46,9 +46,7 @@ coverage/
 *.har
 *.dmp
 
-# Deferred EduX implementation and development-only Inspector analyzers.
-/adapters/edux.js
-/docs/EDUX_SOLVER.md
+# Development-only Inspector analyzers.
 /tools/analyze-inspector.cjs
 /tools/inspector-deep.cjs
 /tools/inspector-intelligence.cjs
