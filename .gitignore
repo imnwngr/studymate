@@ -19,3 +19,14 @@ coverage/
 # Distributable extension archives
 *.zip
 *.crx
+
+# Private local Inspector recordings and generated analysis (keep directory placeholders)
+/inspector-data/exports/*
+!/inspector-data/exports/.gitkeep
+/inspector-data/reports/*
+!/inspector-data/reports/.gitkeep
+/inspector-data/prompts/*
+!/inspector-data/prompts/.gitkeep
+
+# Local Chrome test profile contains browsing and credential stores.
+/.spark-browser-temp-profile/
