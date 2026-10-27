@@ -1,8 +1,8 @@
 {
   "extName": {
-    "message": "Spark Study Assistant"
+    "message": "studymate"
   },
   "extDescription": {
-    "message": "讀取 NGL Spark 練習、比較 AI 答案，並透過多語言介面安全填寫。"
+    "message": "查看支援的 NGL Spark 與相容 QTI 練習，比較已設定的 AI 答案，並在本機檢查互動。"
   }
 }

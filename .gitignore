@@ -30,3 +30,25 @@ coverage/
 
 # Local Chrome test profile contains browsing and credential stores.
 /.spark-browser-temp-profile/
+
+# Local audit state, visual evidence, and captured Inspector fixtures.
+/docs/agent-state/
+/docs/ui/
+/docs/*baseline*.json
+/docs/*review*.json
+/docs/*verification*.json
+/docs/release-*-files.json
+/docs/*EVIDENCE.md
+/docs/*READINESS.md
+/tests/fixtures/inspector-*.json
+/spark-inspector-*.json
+/spark-exercise-inspections-*.json
+*.har
+*.dmp
+
+# Deferred EduX implementation and development-only Inspector analyzers.
+/adapters/edux.js
+/docs/EDUX_SOLVER.md
+/tools/analyze-inspector.cjs
+/tools/inspector-deep.cjs
+/tools/inspector-intelligence.cjs

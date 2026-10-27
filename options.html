@@ -4,8 +4,8 @@
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1" name="viewport"/>
 <meta content="light dark" name="color-scheme"/>
-<title>Settings · Spark Study Assistant</title>
-<link href="styles.css" rel="stylesheet"/>
+<title>Settings · studymate</title>
+<link href="styles.css" rel="stylesheet"/><link href="themes.css" rel="stylesheet"/><script src="visual-style.js"></script>
 </head>
 <body class="options">
 <svg aria-hidden="true" class="icon-defs" xmlns="http://www.w3.org/2000/svg">
@@ -19,7 +19,7 @@
 </svg>
 <div class="settings-layout">
 <aside aria-label="Settings navigation" class="settings-sidebar">
-<div class="sidebar-brand"><img alt="" height="42" src="icons/icon48.png" width="42"/><div><strong>Spark Assistant</strong><small data-i18n="sidebarSubtitle"></small></div></div>
+<div class="sidebar-brand"><img alt="" height="42" src="icons/icon48.png" width="42"/><div><strong>studymate</strong><small data-i18n="sidebarSubtitle"></small></div></div>
 <p class="sidebar-caption" data-i18n="sidebarCustomize"></p>
 <nav aria-label="Settings sections" class="settings-nav"><a class="nav-link is-active" data-nav="appearance" href="#appearance"><span data-i18n="navGeneral">General</span></a>
 <a class="nav-link" data-nav="colors" href="#wallpaperStudio"><span class="nav-color-dot" aria-hidden="true"></span><span data-i18n="navAtmosphere">Color studio</span></a>
@@ -27,7 +27,7 @@
 <a class="nav-link" data-nav="providers" href="#providers"><svg class="ui-icon"><use href="#ic-cube"></use></svg><span data-i18n="navProviders"></span></a>
 <a class="nav-link" data-nav="privacy" href="#privacy"><svg class="ui-icon"><use href="#ic-lock"></use></svg><span data-i18n="navPrivacy"></span></a>
 </nav>
-<div class="sidebar-bottom"><span class="sidebar-indicator"></span><div><strong>Spark Assistant</strong><small data-i18n="localSettings"></small></div></div>
+<div class="sidebar-bottom"><span class="sidebar-indicator"></span><div><strong>studymate</strong><small data-i18n="localSettings"></small></div></div>
 </aside>
 <main class="settings-page">
 <header class="settings-topbar"><span data-i18n="topbar"></span><span class="topbar-version" data-i18n="version"></span></header>
@@ -35,6 +35,7 @@
 <section class="settings-intro"><span class="section-kicker" data-i18n="introKicker"></span><h1 data-i18n="introTitle"></h1><p data-i18n="introDescription"></p></section>
 <section aria-labelledby="appearanceTitle" class="settings-section" id="appearance">
 <div class="section-head"><div><span class="section-kicker" data-i18n="appearanceKicker">01 / APPEARANCE</span><h2 data-i18n="appearanceTitle" id="appearanceTitle">Language &amp; appearance</h2><p data-i18n="appearanceDescription">Choose the language and color scheme that suit your workflow.</p></div></div>
+<fieldset class="style-chooser"><legend data-i18n="visualStyle">Visual style</legend><p class="field-help" data-i18n="styleHelp">Preview instantly. Your style is saved automatically.</p><div class="style-grid"><label class="style-choice"><input type="radio" name="uiVisualStyle" value="liquid-glass"/><span class="style-card"><span class="style-preview preview-liquid-glass" aria-hidden="true"><span class="mini-nav"></span><span class="mini-heading"></span><span class="mini-row"></span><span class="mini-row"></span><span class="mini-action"></span></span><span class="style-card-name" data-i18n="styleGlass">Ventrix</span><span class="style-card-description" data-i18n="styleGlassDescription"></span><span class="style-selected" aria-hidden="true">✓</span></span></label><label class="style-choice"><input type="radio" name="uiVisualStyle" value="editorial-studio"/><span class="style-card"><span class="style-preview preview-editorial-studio" aria-hidden="true"><span class="mini-nav"></span><span class="mini-heading"></span><span class="mini-row"></span><span class="mini-row"></span><span class="mini-action"></span></span><span class="style-card-name" data-i18n="styleEditorial">Chainsaw Editorial</span><span class="style-card-description" data-i18n="styleEditorialDescription"></span><span class="style-selected" aria-hidden="true">✓</span></span></label><label class="style-choice"><input type="radio" name="uiVisualStyle" value="paper-atelier"/><span class="style-card"><span class="style-preview preview-paper-atelier" aria-hidden="true"><span class="mini-nav"></span><span class="mini-heading"></span><span class="mini-row"></span><span class="mini-row"></span><span class="mini-action"></span></span><span class="style-card-name" data-i18n="stylePaper">InsightOS</span><span class="style-card-description" data-i18n="stylePaperDescription"></span><span class="style-selected" aria-hidden="true">✓</span></span></label><label class="style-choice"><input type="radio" name="uiVisualStyle" value="signal-instrument"/><span class="style-card"><span class="style-preview preview-signal-instrument" aria-hidden="true"><span class="mini-nav"></span><span class="mini-heading"></span><span class="mini-row"></span><span class="mini-row"></span><span class="mini-action"></span></span><span class="style-card-name" data-i18n="styleSignal">Cognify</span><span class="style-card-description" data-i18n="styleSignalDescription"></span><span class="style-selected" aria-hidden="true">✓</span></span></label></div><div class="style-footer"><button type="button" id="resetAppearance" class="color-reset" data-i18n="resetAppearance">Reset appearance</button><span id="styleSaveStatus" role="status" aria-live="polite" class="field-help"></span></div></fieldset>
 <div class="settings-card preferences-card">
 <div class="preference-row"><div><label class="field-label" data-i18n="language" for="uiLanguage">Display language</label><p class="field-help" data-i18n="languageHelp">English is the default for a new installation.</p></div><select aria-label="Display language" class="settings-input" id="uiLanguage"><option value="en">English</option><option value="vi">Tiếng Việt</option><option value="zh-CN">简体中文</option><option value="zh-TW">繁體中文</option></select></div>
 <div class="preference-row"><div><label class="field-label" data-i18n="theme" for="uiTheme">Appearance</label></div><select aria-label="Appearance" class="settings-input" id="uiTheme"><option data-i18n="systemTheme" value="system">System</option><option data-i18n="lightTheme" value="light">Light</option><option data-i18n="darkTheme" value="dark">Dark</option></select></div>

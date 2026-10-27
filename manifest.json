@@ -11,7 +11,7 @@
   },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Spark Study Assistant"
+    "default_title": "studymate"
   },
   "options_page": "options.html",
   "permissions": [
@@ -38,6 +38,14 @@
       "match_about_blank": true,
       "js": [
         "qti.js",
+        "core/site-registry.js",
+        "solvers/interactions.js",
+        "solvers/sequence.js",
+        "solvers/text-correction.js",
+        "answer-sources/embedded-qti.js",
+        "core/runtime.js",
+        "adapters/ngl.js",
+        "adapters/generic.js",
         "content.js",
         "inspector-content.js"
       ],

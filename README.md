@@ -1,256 +1,111 @@
-<div align="center">
-  <img src="icons/icon128.png" alt="Spark Study Assistant icon" width="90" height="90" />
+# studymate
 
-  # Spark Study Assistant
+A Chrome Manifest V3 extension for reading, reviewing and filling supported learning exercises. studymate includes an NGL / Spark adapter, conservative native-control discovery for other websites, configurable AI fallback, four visual styles, and a read-only Inspector.
 
-  **Answers from the exercise first. AI only when needed.**
+[Tiếng Việt](README.vi.md) · [Repository](https://github.com/imnwngr/spark-study-assistant) · [Changelog](CHANGELOG.md)
 
-  A local-first Chrome extension for reviewing and filling supported exercises on National Geographic Learning Spark.
+## Release status
 
-  [![Chrome MV3](https://img.shields.io/badge/Chrome-Manifest_V3-4285F4?style=flat-square&logo=googlechrome&logoColor=white)](#installation)
-  [![Release](https://img.shields.io/badge/version-0.7.14-8C83F4?style=flat-square)](CHANGELOG.md)
-  [![JavaScript](https://img.shields.io/badge/JavaScript-vanilla-F7DF1E?style=flat-square&logo=javascript&logoColor=111)](#project-structure)
-  [![Tests](https://img.shields.io/badge/tests-146_passing-2A946A?style=flat-square)](#testing)
+The manifest remains **0.7.16**. **v0.8.0 is a proposed release, not a published or fully verified candidate.** The working tree contains development changes, including deferred integration that must be excluded before publication. No current test-pass badge or authenticated compatibility claim is made.
 
-  [**Get started**](#installation) · [**How answers are found**](#answer-pipeline) · [**Project structure**](#project-structure) · [**Tiếng Việt**](README.vi.md)
-</div>
+The project name is now **studymate**. The GitHub repository and existing local directory remain named `spark-study-assistant`. Compatibility-sensitive identifiers and stored preferences retain their existing names.
 
----
+## Features and supported environments
 
-<div align="center">
-<table>
-  <tr>
-    <td align="center"><img src="docs/screenshots/popup-glass-light.png" alt="Spark Assistant popup — light" width="295" /></td>
-    <td align="center"><img src="docs/screenshots/popup-glass-dark.png" alt="Spark Assistant popup — dark" width="295" /></td>
-  </tr>
-  <tr><td align="center"><sub>Light · compact question review</sub></td><td align="center"><sub>Dark · Liquid Glass surfaces</sub></td></tr>
-</table>
-</div>
+| Area | Current implementation and limits |
+| --- | --- |
+| NGL / Spark | Exercise discovery across accessible frames; QTI mapping; text, dropdown, radio, multiple-choice, sequence and text-correction workflows. Support depends on the actual exercise structure. |
+| Word Pool | Returns placed tiles through the site's UI, verifies empty gaps, then refills from the QTI mapping. Already-filled editable exercises follow the same Reset → Fill workflow. Original-box association, occupied-gap binding and live retention still require review. |
+| Checkbox | Maps QTI IDs and checks the final selected set. A known popup validation condition can reject valid multiple-answer results before Apply. |
+| Linking Lines | Maps unique endpoint labels to QTI pairs and sends connection gestures. The current adapter cannot observe the exact final graph and returns an uncertain result. This is not fully verified automatic solving. |
+| Generic Multisite | Discovers native text fields, selects, radios and checkboxes in explicit exercise groups. Automatic application requires unique response identities and a compatible embedded QTI assessment. Unsupported controls and stale DOM references are refused. |
+| Embedded QTI | Parses bounded XML or JSON-wrapped XML without evaluating scripts. A page-provided answer declaration is not independent proof of publisher authenticity or grading correctness. |
+| AI and offline fallback | Existing NGL workflows can use configured OpenAI-compatible providers or limited offline rules. Generic suggestions without a locally verified mapping cannot authorize Apply. |
+| Appearance | Ventrix, Chainsaw Editorial, Cognify and InsightOS; light, dark and system modes; English, Vietnamese, Simplified Chinese and Traditional Chinese. |
+| Inspector | Read-only DOM snapshots and bounded interaction recording, frame coverage, NGL deep evidence, generic structural capture and local JSON export. |
 
-> [!NOTE]
-> UI screenshots are **illustrative** (mock exercise data). The QTI reader has been tested with simulated five-choice and six-text-entry browser fixtures, but not every Spark interaction type or authenticated assignment has been verified.
-
-## v0.7.5 — Sequence payload fix and streamlined controls
-
-The QTI ordered tokens now reach the experimental Spark sequence adapter. The main button is **Solve**; the submission button is **Done & next**, with no extra confirmation popup. Spark state still must be verified; synthetic dragging might be ignored and is **not verified on the live site**. Submission remains gated on verified answers.
-
-## v0.7.4 — Experimental sequence fill
-
-For Avallain word-order sequences, **Solve & fill** attempts synthetic mouse dragging and checks visible word order. This is experimental and may be blocked by Spark; no direct DOM reordering is used. **Submit & next** is disabled for these sequences pending verification of answer persistence.
-
-## v0.7.3 — Review sequences and safer multi-screen QTI
-
-Based on **8 additional real Spark Inspector captures**, the extension recognizes Review Real life **`orderInteraction`** sequences and displays their published, correctly ordered QTI sentence with punctuation **when the visible tiles match exactly one XML assessment**. **Ordering remains manual:** the current Avallain drag-and-drop UI has not been verified for programmatic manipulation, so Solve & fill will display the answer but will not drag tiles or silently submit it.
-
-For **10-screen Review** multiple-choice exercises, QTI candidates must now agree with the **actual choice text and stable IDs** in the active screen, not merely reusable identifiers such as `C0_0`. This reduces the risk of selecting another screen's XML. The existing fill adapter for radio choices remains available where DOM matching succeeds.
-
-**Speaking and Writing—including Writing skill—remain deferred** as requested. v0.7.2 Submit & next behavior is unchanged; server-side score persistence remains unverified without checking Spark. Validation: **123 Node tests and isolated Chromium integration runs** (5/5 shuffled radio fill and screen-specific sequence preview); no authenticated live test.
-
-## v0.7.2 — Compact actions and safe Submit & next
-
-The popup now offers **Solve & fill**, **Copy exercise** and the existing guarded **Submit & next** control. The duplicate **Solve** and **Fill selected answers** buttons were removed. Copy now reads the **current live Spark screen** with its instructions, full question text, word bank and choices—without exporting typed answers, QTI keys or hidden screens.
-
-**Submit & next:** v0.7.2 uses the observed `submit` (Submit to Gradebook) control, checks the UI change, then optionally uses `forward_lo` (Next) only when uniquely available and after explicit confirmation. A disabled Submit control does not by itself prove the grade was saved.
-
-## What's new in 0.7.0 — QTI adapters
-
-The QTI-first reader now handles **single-choice radios, multiple-choice checkboxes, shuffled option IDs, text-entry variants and multiple assessment screens**, in addition to existing dropdowns and text blanks. The source of truth is still the published `correctResponse` declaration, validated against the current screen and its controls.
-
-The update was informed by 13 read-only exercise structure captures. The collection itself is **not included in the repository**. Radio and checkbox scanning/clicking were verified in an isolated Chromium fixture; authenticated Spark sessions still need hands-on validation.
-
-**Review-only drag/drop:** `gapMatchInteraction` pairs can now be read and shown as suggested mappings, but automated dragging is disabled until live UI behavior is established. **Speaking and all Writing tasks (including Writing skill)** are explicitly deferred and do not receive the new adapter.
-
-**Wordbuilding and text variants:** QTI may encode `play the piano|the piano` as alternatives, or return a partial-word suffix such as `tay`. The reader chooses a compatible value *for the blank*, never enters the literal `|`-joined string, and does not expand suffixes into full words. Multi-screen activities choose XML by question context and abstain on ambiguous matches.
-
-[**Adapter compatibility & safety**](docs/QTI_ADAPTERS.md) · [**QTI reader internals**](docs/QTI_READER.md) · [**Changelog**](CHANGELOG.md)
-
-## Previous releases
-
-- **0.6.1** — Shared Wordbuilding banks, stricter QTI text validation, and diagnostic tooling.
-- **0.6.0** — Initial QTI-first reading and reduced UI compositing cost.
-- **0.5.x** — Glass appearance, adaptable color studio and popup size fix.
-
-## Answer pipeline
-
-```mermaid
-flowchart TD
-  A[Read current Spark exercise] --> B[Find published data.js in active frame]
-  B --> C{Valid QTI assessment?}
-  C -->|Yes| D[Read correctResponse declarations]
-  D --> E{Exact ID and option match?}
-  E -->|Yes| F[Verified local answer]
-  E -->|No| G[Unresolved question]
-  C -->|No| G
-  G --> H{Configured fallback?}
-  H -->|AI profile| I[Ask selected API for unresolved items only]
-  H -->|Legacy rules| J[Conservative rule suggestions]
-  F --> K[Review answers in popup]
-  I --> K
-  J --> K
-  K --> L[Fill supported controls]
-  L --> M[Optional confirmed Check & Next]
-```
-
-The QTI reader is **not** a general answer-key scraper. See [implementation notes](docs/QTI_READER.md). It accepts an answer only when the client-side assessment has an explicit `responseDeclaration / correctResponse` and the `responseIdentifier` plus **entire choice set** match the visible exercise. The adapter supports dropdown, radio, checkbox and explicit text-entry declarations. Matching pairs can be displayed for review only. Reordering, automated drag/drop, deferred Speaking/Writing and custom controls remain unsupported or unchanged.
-
-No downloaded script is evaluated by the QTI parser. The extension parses the JSON-escaped XML strings in `data.js`, with origin, size and structural checks. QTI content stays in the browser. **Only questions not matched locally are sent to your chosen AI provider.**
-
-| Case | What happens |
-|---|---|
-| All visible choices map to QTI | **No AI call**; results marked `Verified QTI` |
-| Some choices map | QTI answers are retained; only unmatched items use the configured fallback |
-| Missing or malformed QTI | Existing single-AI, multi-AI comparison or legacy rules are used |
-| Controls cannot be verified on-page | The extension does not silently submit |
-
-## Features
-
-| | Capability |
-|---|---|
-| ◈ | **QTI-first adapters** for dropdowns, radio, checkbox and text answers; view-only gap pairs |
-| ↗ | **AI fallback** with independent OpenAI-compatible profiles and model comparison |
-| ✓ | **Review & edit** each response before filling |
-| ⌁ | **Guarded filling** for supported dropdown and text controls |
-| ⇥ | **Check & next (experimental)** only after a user confirmation and DOM validation |
-| ◐ | **Glass appearance**, Light / Dark / System and a nine-preset color studio with HEX & hue wheel |
-| 文 | **Four languages**: English (default), Tiếng Việt, 简体中文, 繁體中文 |
+Generic support does not mean universal website compatibility. Custom widgets, inaccessible frames, ambiguous exercises and missing answer sources can prevent operation. No deferred site-specific adapter is advertised as supported.
 
 ## Installation
 
-1. Download this repository or use **Code → Download ZIP** on GitHub.
-2. Open **`chrome://extensions/`** in Chrome or Chromium.
-3. Enable **Developer mode**, select **Load unpacked**, and choose the directory containing `manifest.json`.
-4. Open an assignment on [NGL Spark](https://learn.eltngl.com/) and refresh the page once after installing/updating the extension.
-5. Open Spark Study Assistant and use **Solve & fill**. Review the result on Spark. Use **Copy exercise** to capture the complete current screen without answers.
+1. Download or clone the current [repository](https://github.com/imnwngr/spark-study-assistant).
+2. Open `chrome://extensions` and enable **Developer mode**.
+3. Choose **Load unpacked** and select the directory containing `manifest.json`.
+4. Open the intended learning website. After updating the extension, reload it and refresh the exercise tab.
+5. Open **studymate** from the extension toolbar.
 
-No `npm install`, bundler or API key is needed to inspect *compatible* published QTI answers. **An API key and endpoint are required for an AI fallback** if an exercise is not fully covered by QTI or the limited legacy rules.
+No build step is required for the current classic-script runtime. The repository's published revision may differ from this local development candidate. Do not assume that a v0.8.0 download exists.
 
-### Configure AI fallback
+## Use
 
-Go to **Settings → AI connections**, add profiles and choose the model(s) to use. Under **Answers**, select **Single AI**, **Compare AIs** or **Legacy rules**. The chosen mode applies **only after** QTI checking; a successful QTI answer never needs an API call.
+1. Open the intended exercise and allow it to finish loading.
+2. Open studymate and use **Scan** to review the detected exercise.
+3. Choose **Solve**. The popup reads available answers and invokes Apply for eligible results.
+4. Review the actual website state and any uncertain or skipped results.
+5. Use **Done & next** only when enabled and when you intend to submit.
 
-OpenAI-compatible Chat Completions endpoints are supported (OpenAI, OpenRouter, Groq, DeepSeek, compatible Gemini endpoints, Ollama local server, custom endpoint). Native Anthropic Messages and the OpenAI Responses API are *not* directly implemented.
+Solve can advance within an NGL activity after its verification gates pass. Gradebook submission remains a separate explicit action. A changed submission button does not independently prove that a score was saved. Generic adapters do not support submission or automatic navigation.
 
-### Personalize the interface
+Configure providers, language, appearance and navigation preferences in **Settings**. API use is optional and can incur provider charges. Save provider settings to request permission for their endpoints. Visual-style selection saves automatically.
 
-<div align="center">
-<table>
-<tr><td><img src="docs/screenshots/color-studio-light.png" width="410" alt="Color Studio light" /></td><td><img src="docs/screenshots/color-studio-dark.png" width="410" alt="Color Studio dark" /></td></tr>
-</table>
-</div>
+## Inspector
 
-Select Light, Dark or System, pick one of nine colors, enter a custom HEX value or use the hue ring and intensity slider. Preferences stay in `chrome.storage.local`. For smoother scrolling, glass blur is concentrated in larger surfaces rather than every nested row; reduced-motion and reduced-transparency preferences are respected.
+1. Open Inspector from studymate while the intended source tab is selected.
+2. Check frame coverage and request access only to the frame origins you intend to inspect.
+3. Capture a DOM snapshot, or start recording and perform the interaction manually.
+4. Stop recording; inspect warnings about inaccessible frames, truncation and missing boundaries.
+5. Export JSON and review it before sharing.
 
-## Project structure
+Inspector remains attached to the chosen tab. Top-level navigation stops the session; child-frame document generations are tracked separately. Recording automatically stops after three minutes. It does not solve, submit, simulate interactions or establish answer correctness.
 
-```text
-spark-study-assistant/
-│
-├── manifest.json                 # Chrome MV3 permissions, scripts & version
-├── popup.html                    # Popup shell and actions
-├── popup.js                      # Scan → QTI → fallback → review → fill
-├── options.html                  # Settings layout
-├── options.js                    # AI profile, language and preference editing
-├── styles.css                    # Layout, glass tokens, responsive/accessibility
-├── appearance.js                 # Light/dark/wallpaper runtime
-├── color-studio.js               # Swatches, hue wheel and HEX validation
-├── i18n.js                       # UI copy for four languages
-│
-├── content.js                    # Per-iframe DOM scan, fill and check/next
-├── qti.js                        # Safe QTI XML parsing, multi-screen & ID adapters
-├── background.js                 # Orchestrates fallback API requests
-├── providers.js                  # Provider profiles, schemas and comparison
-├── solver.js                     # Small legacy ruleset (not a local LLM)
-│
-├── _locales/                     # Chrome manifest translations
-│   ├── en/  ├── vi/  ├── zh_CN/  └── zh_TW/
-├── icons/                        # Bundled extension icons
-├── docs/
-│   ├── screenshots/              # UI previews (illustrative)
-│   ├── AUTOMATION_DISCOVERY.md   # Privacy-safe DOM investigation
-│   ├── QTI_READER.md            # Reader design, validation and limits
-│   ├── QTI_ADAPTERS.md          # Radio, checkbox, text, multi-screen, pair previews
-│   ├── WORD_BUILDING.md          # Shared bank + text-gap compatibility
-│   ├── GLASS_DESIGN.md           # Visual/material decisions
-│   └── ...                       # Historical design/research notes
-├── tools/
-│   └── inspect-wordbuilding.js  # Read-only DOM/QTI discovery console script
-└── tests/                        # Zero-dependency Node regression tests
-    ├── qti.test.js               # XML answers, mismatches and fallback
-    ├── qti-adapters.test.js      # New interaction and multi-screen regression cases
-    ├── browser-adapters.html     # Isolated Chromium smoke-test fixture
-    ├── wordbuilding.test.js      # Collocation guards and bank handoff
-    ├── providers.test.js
-    ├── solver.test.js
-    ├── background.test.js
-    ├── appearance.test.js
-    ├── i18n.test.js
-    └── ui.test.js
-```
+Choose the repository's `inspector-data/exports` directory for local exports when the browser supports a directory picker. Access may need renewed permission. Otherwise use Save As; browsers without pickers use their download settings. The extension cannot infer the repository's absolute path or silently grant filesystem access.
 
-## Testing
+Inspector export filenames, schema markers and persisted directory identifiers retain legacy Spark names for compatibility.
 
-Run the regression suite from PowerShell (single paste):
+Optional local analyzers under `tools/` are developer utilities, not required extension runtime assets. Generated reports and prompts are proposals for a separate authorized development step.
 
-```powershell
-& {
-    Set-Location "$HOME\Downloads\spark-study-assistant"
-    node --test
-}
-```
+## Permissions
 
-The **109 automated Node tests** cover existing functionality and new radio, checkbox, alternatives, suffix-only answers, ambiguous multi-screen XML selection and gap-pair previews. An isolated Chromium test also verified DOM scanning and clicking one radio plus two checkboxes. These are synthetic tests, **not** an authenticated Spark compatibility guarantee.
+- **activeTab**: temporary access associated with the user's extension action.
+- **scripting**: inject required scripts into accessible frames.
+- **webNavigation**: discover the tab's frame hierarchy.
+- **storage**: save local preferences and provider configuration.
+- Existing host permissions cover NGL, Avallain frames and the declared OpenAI API origin.
+- Optional HTTPS and localhost permissions support explicitly authorized endpoints or frame access. Declaring an optional permission does not grant it automatically.
 
-## Permissions & safety
+Cross-origin frames may need separate grants. Restricted browser pages, denied frames and closed Shadow DOM remain unavailable.
 
-- Reads exercise content in authorized Spark frames; cross-origin scripts are *not* fetched by the QTI reader.
-- API requests carry only unresolved extracted question/choice data to the selected provider — not LMS cookies, tokens or assignment URL.
-- API keys remain in Chrome local extension storage, which is **not a hardened secrets vault**; never add credentials to Git.
-- **Check & next** requires an explicit user click and confirmation. It may not be equivalent to the final LMS score submission. See [automation evidence](docs/AUTOMATION_DISCOVERY.md).
-- No background telemetry, remote UI framework, embedded LLM or large offline knowledge database.
+## Privacy and local data
 
----
+Provider keys and settings use Chrome local storage; they are not a hardened secret vault. Configured API calls send exercise questions and choices to the chosen provider. Offline mode avoids those provider calls.
 
-<div align="center">
-  <strong>Less guessing. More verifiable answers.</strong><br />
-  <sub>Independent open-source companion; not affiliated with National Geographic Learning, Spark or Avallain.</sub><br /><br />
-  <a href="README.vi.md">Đọc bản tiếng Việt</a> · <a href="CHANGELOG.md">Changelog</a> · <a href="docs/AUTOMATION_DISCOVERY.md">Known limitations</a>
-</div>## v0.7.2 — Verified Spark submission controls (UI-level)
+Inspector does not intentionally read cookies, authentication stores or application models. Editable values are redacted, but exports are **not guaranteed anonymized**: NGL exercise text, selected answers, DOM identifiers, titles and URL paths can remain. Generic capture records structural controls and selection state. Avoid recording sensitive pages and review every export before sharing.
 
-The authenticated **1b | Grammar | 3** submit/next diagnostic shows that **Submit to Gradebook** (`data-event="submit"`), not the hidden **Check Answers** control, is the relevant action. After manual submission the button became disabled in about 1.2 seconds; the visible **Next** (`forward_lo`) control then took the user away from the exercise.
+Known Solve failure diagnostics can include answer text. This is an outstanding privacy finding, not a guarantee of sanitized logs.
 
-The extension now selects a unique actionable Spark **Submit to Gradebook** button first and uses **Check Answers** only when that is the actionable control. It requires an explicit confirmation and all recognized answers to be successfully filled and reverified. It waits for a verifiable in-page button transition before requesting Next; on ambiguity, timeout, manual edits or missing Next it stops without attempting another click. The user may disable automatic Next in Settings. **A disabled button is not proof of a successful server-side gradebook save.** Only one real activity was inspected; synthetic Chromium tests cover other branches.
+Keep recordings, generated reports, prompts, browser profiles, screenshots, logs, credentials and local audit files out of commits and release packages. `.gitignore` is not a ZIP packaging policy; use a reviewed production allowlist.
 
+## Known limitations
 
+- Linking Lines lacks exact final-graph verification.
+- Checkbox multi-answer validation needs correction before reliable end-to-end use.
+- Multiple exercise frames can be selected ambiguously by the current popup.
+- Generic Apply requires its own embedded mapping; AI/manual suggestions are not sufficient.
+- Generic DOM replacement normally causes safe refusal and a fresh scan.
+- Word Pool return-to-original-box identity and target-order assumptions need live verification.
+- Synthetic test results do not establish authenticated website compatibility or grade persistence.
+- The local tree still contains deferred site-specific integration; an unrestricted directory ZIP is not a release candidate.
 
+## Development and contribution
 
-### Exercise Inspector (v0.7.8)
+Runtime code lives in `core/`, `adapters/`, `solvers/` and `answer-sources/`. The popup coordinates Scan → Solve → Apply. Inspector scripts run independently of Solve during on-demand recording.
 
-Open the extension popup and select the Inspector toolbar button. In the Inspector tab, capture each Spark screen separately, then export JSON. The inspector is read-only and never uploads data itself. Review exported answers and exercise text before sharing.
+Review the current source and ownership constraints before editing. Preserve unrelated local changes. Use minimal patches and document observed behavior separately from hypotheses. Tests and fixtures can be used locally but are excluded from the currently proposed release commits and runtime package.
 
-### v0.7.12: Reliable iframe recording coverage
+After authorization, run focused Node tests and browser fixtures for changed behavior, then test the exact selected candidate. Browser runners and analyzers may create local artifacts. Authenticated user testing and explicit **TEST OK** remain required before release approval.
 
-The Inspector now reports live iframe coverage, waits for an accessible `ic-text-correction` widget before attaching the interaction recorder, monitors newly loaded frames, and flags recordings with no correction events as unverified. The JSON includes frame diagnostics to help debug missing exercise frames. No Solver functionality is changed.
+## Attribution and licensing
 
-### v0.7.10: Interaction Trace Inspector
+The repository remains maintained at [imnwngr/spark-study-assistant](https://github.com/imnwngr/spark-study-assistant). NGL / Spark identifies the external learning platform, not this extension's new name.
 
-Open Exercise Inspector from the popup. Select **Start recording**, switch to the Spark correction exercise, **manually select an incorrect word, enter its replacement and confirm**, then return to Inspector, choose **Stop recording** and **Export JSON**. Capture screens before/after as desired. Recording observes correction events and transient editors without changing answers, submitting or navigating. It automatically stops after three minutes, limits log sizes, and excludes password fields. Review exported entered text before sharing. The word-correction Solve adapter is **not yet confirmed** by live Spark evidence.
-
-### v0.7.9: Review radio labels and word corrections
-
-Review radio groups now extract actual option captions rather than the decorative dot. The `ic-text-correction.replace` exercise can be mapped only when the published QTI proves a unique correction pair for each incorrect visible word; application uses Spark's own controls. **Synthetic clicks might not be accepted on the live Spark widget, so inspect the result before proceeding.** Other writing skills remain manual and auto-Next is disabled for this correction mode until grading is verified.
-
-### v0.7.14: Recover from older incorrect word edits
-
-When a previous build left `Current Date: Student` instead of `Current occupation: Student`, v0.7.13 refused the entire QTI screen. v0.7.14 binds each correction to the published full-sentence word position and permits a recovery only if the specific mismatched word is marked as edited by Spark. All other fixed words must still match the QTI sentence. Repeated Solve is safe in simulated DOM tests. No automatic submission is added for this mode; actual Spark grading remains unverified.
-
-### v0.7.13: Word-correction capitalization safeguard
-
-In **Review | Writing skill | 1e**, the incorrect label `Occupation` (in “Occupation of birth”) and the valid lowercase `occupation` (in “Current occupation”) must never be treated as the same token. This version maps each QTI correction to one visible word position and verifies the complete set of word positions after editing. Repeated **Solve** is regression-tested. If an older version produced “Current Date: Student”, restore the word to `qualifications` or `occupation` manually (or clear the exercise) before using this version. Spark grading is not guaranteed by local DOM checks.
-
-### Universal Exercise Inspector (v0.7.15)
-
-Open Inspector from the popup. Choose **Capture screen** to collect the current exercise, or **Start recording** → interact with Spark manually → **Stop recording** → **Export JSON**. The recorder now watches all exercise `.interaction` types and includes automatic before/after snapshots, even for radio, dropdown, pronunciation and dragging exercises. If Spark shows multiple screens, record or capture each separately. Review the JSON before sharing: it includes exercise text and values typed into exercise inputs. Recording an interaction is **not proof that a Solve adapter exists or the answer was scored correct**.
-
-### Word-pool gap matching (v0.7.16)
-
-For Spark `om-text-gap` exercises, Solve can apply QTI-verified `gapMatchInteraction` responses by selecting each phrase then the corresponding gap. Exact bank labels, gap count, QTI screen content and a unique assessment mapping are required. Existing wrong placements are left intact for manual correction; no DOM-only changes or assumed gradebook persistence. Supports qualifying Real life and structured Writing skill screens, but not open-ended writing.
+No standalone license file was found in the reviewed repository. This rebrand does not add a license or grant new redistribution rights. Preserve existing notices and clarify licensing with the repository owner before redistribution.

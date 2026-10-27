@@ -1,8 +1,8 @@
 {
   "extName": {
-    "message": "Spark Study Assistant"
+    "message": "studymate"
   },
   "extDescription": {
-    "message": "Đọc bài tập NGL Spark, so sánh đáp án AI và điền bài với giao diện đa ngôn ngữ."
+    "message": "Xem bài NGL Spark và QTI tương thích được hỗ trợ, so sánh đáp án AI đã cấu hình và kiểm tra tương tác cục bộ."
   }
 }

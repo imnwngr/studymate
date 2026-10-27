@@ -93,6 +93,12 @@
     return anchors;
   }
   const correctionModifiedAt=(q,i)=>Array.isArray(q.correctionModifiedIndices)&&q.correctionModifiedIndices.includes(i);
+  function wordPoolInventoryMatches(q,sourceLabels){
+    const expected=sourceLabels.map(norm).sort().join('\0');
+    const possibilities=[q.poolLabels,...(q.wordPoolBankAlternatives||[])];
+    return possibilities.some(labels=>Array.isArray(labels)&&labels.length===sourceLabels.length&&
+      labels.every(label=>norm(label))&&labels.map(norm).sort().join('\0')===expected);
+  }
   function mapTextCorrection(xml,q){
     const fail=reason=>({answers:[],total:1,reason,diagnostics:[reason]});
     const prompt=norm(child(xml.getElementsByTagName('itemBody')[0],'div')?.textContent||
@@ -166,7 +172,7 @@
       if(!declaration){fail('missingDeclaration');continue;}
       let answer='',selectedIds=[],selectedLabels=[],choiceOptions=[],alternatives=[],pairs=[];
       if(type==='inlineChoiceInteraction'||type==='choiceInteraction'){
-        const supported=type==='inlineChoiceInteraction'?q.kind==='dropdown':['choice','multi'].includes(q.kind);
+        const supported=type==='inlineChoiceInteraction'?q.kind==='dropdown':['choice','multi','checkbox'].includes(q.kind);
         if(!supported){fail('unsupportedControl');continue;}
         const tag=type==='inlineChoiceInteraction'?'inlineChoice':'simpleChoice';
         const options=children(el,tag).map(x=>({id:attr(x,'identifier'),label:clean(x.textContent)}));
@@ -198,7 +204,7 @@
             };
             if(options.some(option=>!hasLabel(option.label))){fail('unverifiedChoiceLabels');continue;}
           }
-          if(q.kind==='multi' && declaration.cardinality!=='multiple'){fail('cardinalityMismatch');continue;}
+          if(['multi','checkbox'].includes(q.kind) && declaration.cardinality!=='multiple'){fail('cardinalityMismatch');continue;}
           if(q.kind==='choice' && declaration.values.length!==1){fail('cardinalityMismatch');continue;}
         }
         const wanted=declaration.values;
@@ -250,14 +256,11 @@
         const sources=sourceNodes.map(n=>({id:attr(n,'identifier'),label:clean(n.textContent)}));
         const gaps=gapNodes.map(n=>attr(n,'identifier'));
         const sourceIds=sources.map(x=>x.id);
-        const visible=(q.poolLabels||[]).map(norm).sort();
         if(!q.applyable || declaration.baseType!=='directedPair'||declaration.cardinality!=='multiple'||
           sources.length<2 || gaps.length!==q.gapCount ||
-          sources.length!==(q.poolLabels||[]).length ||
           sources.some(x=>!x.id||!x.label)||gaps.some(x=>!x)||
           new Set(sourceIds).size!==sources.length||new Set(gaps).size!==gaps.length||
-          new Set(sources.map(x=>norm(x.label))).size!==sources.length ||
-          sources.map(x=>norm(x.label)).sort().join('\0')!==visible.join('\0') ||
+          !wordPoolInventoryMatches(q,sources.map(x=>x.label)) ||
           declaration.values.length!==gaps.length){fail('wordPoolQtiMismatch');continue;}
         const mapped=new Map();let safe=true;
         for(const value of declaration.values){
@@ -265,15 +268,18 @@
           if(ids.length!==2||!sourceIds.includes(ids[0])||!gaps.includes(ids[1])||mapped.has(ids[1])){safe=false;break;}
           mapped.set(ids[1],ids[0]);
         }
-        if(!safe||mapped.size!==gaps.length){fail('wordPoolPairsAmbiguous');continue;}
+        if(!safe||mapped.size!==gaps.length||
+          new Set(mapped.values()).size!==mapped.size){fail('wordPoolPairsAmbiguous');continue;}
         pairs=gaps.map((id,targetIndex)=>{
           const sourceId=mapped.get(id);
-          return {sourceId,targetId:id,source:sources.find(c=>c.id===sourceId).label,
+          const source=sources.find(c=>c.id===sourceId).label;
+          return {sourceId,targetId:id,source,
+            labelAmbiguous:sources.filter(c=>norm(c.label)===norm(source)).length>1,
             target:`Gap ${targetIndex+1}`,targetIndex};
         });
         answer=pairs.map(e=>`${e.source} → ${e.target}`).join(' ; ');
       } else if(type==='gapMatchInteraction'||type==='associateInteraction'){
-        if(q.applyable||!['match','associate','manual'].includes(q.kind) ||
+        if((q.applyable&&q.kind!=='linkingLines')||!['match','associate','manual','linkingLines'].includes(q.kind) ||
            !['directedPair','pair'].includes(declaration.baseType)||declaration.cardinality!=='multiple'){
           fail('unsupportedInteraction:'+type);continue;
         }
@@ -289,6 +295,19 @@
           pairs.push({sourceId:tuple[0],targetId:tuple[1],source:choices.get(tuple[0]),target:choices.get(tuple[1])});
         }
         if(!valid||!pairs.length){fail('pairMismatch');continue;}
+        if(q.kind==='linkingLines'&&q.applyable){
+          const sources=(q.linkingSources||[]).map(norm),targets=(q.linkingTargets||[]).map(norm);
+          const labels=[...choices.values()].map(norm);
+          const all=[...sources,...targets];
+          if(choiceNodes.length!==choices.size||sources.length<2||sources.length!==targets.length||pairs.length!==sources.length||
+             all.length!==labels.length||new Set(all).size!==all.length||new Set(labels).size!==labels.length||
+             all.some(label=>!labels.includes(label))||
+             new Set(pairs.map(p=>p.sourceId)).size!==pairs.length||
+             new Set(pairs.map(p=>p.targetId)).size!==pairs.length||
+             pairs.some(p=>!sources.includes(norm(p.source))||!targets.includes(norm(p.target)))){
+            fail('linkingEndpointMismatch');continue;
+          }
+        }
         answer=pairs.map(p=>`${p.source} → ${p.target}`).join(' ; ');
       } else {fail('unsupportedInteraction:'+type);continue;}
       if(answer)answers.push({id:q.id,answer,confidence:'high',source:'qti',responseId,
@@ -296,6 +315,7 @@
         ...(alternatives.length?{acceptedVariants:alternatives}:{}),
         ...(pairs.length?{pairs}:{}),
         ...(q.kind==='gapWordPool'?{wordPoolVerified:true}:{}),
+        ...(q.kind==='linkingLines'&&q.applyable?{linkingVerified:true}:{}),
         ...(type==='orderInteraction'?{manualOnly:false,orderedTokens:selectedLabels}:{}),
         explanation:'Declared correct response in the published exercise data.'});
     }
@@ -347,8 +367,7 @@
     if(its.length===1 && name(its[0])==='gapMatchInteraction' && questions[0]?.kind==='gapWordPool'){
       const q=questions[0],el=its[0];
       const bank=descendants(el,'gapText').map(n=>norm(n.textContent)).sort();
-      const shown=(q.poolLabels||[]).map(norm).sort();
-      if(bank.length<2||bank.length!==shown.length||bank.join('\0')!==shown.join('\0')||
+      if(bank.length<2||!wordPoolInventoryMatches(q,bank)||
         descendants(el,'gap').length!==q.gapCount)return 0;
       // Both the word bank AND sentence context must point to this screen.
       const a=finger(el.textContent),b=finger(q.context||'');

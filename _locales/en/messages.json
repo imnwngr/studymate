@@ -1,8 +1,8 @@
 {
   "extName": {
-    "message": "Spark Study Assistant"
+    "message": "studymate"
   },
   "extDescription": {
-    "message": "Read NGL Spark exercises, compare AI answers and fill them with a multilingual, carefully controlled interface."
+    "message": "Review supported NGL Spark and compatible QTI exercises, compare configured AI answers, and inspect interactions locally."
   }
 }

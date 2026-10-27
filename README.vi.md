@@ -1,249 +1,111 @@
-## v0.7.5 — Sửa truyền thứ tự từ và đổi tên nút
+# studymate
 
-Sửa lỗi v0.7.4 làm mất `orderedTokens` khi gọi adapter kéo-thả. Nút chính đổi thành **Solve**, nút nộp đổi thành **Done & next** và bỏ hộp thoại xác nhận bổ sung. Việc nộp vẫn chỉ diễn ra khi người dùng nhấn nút và toàn bộ đáp án được xác minh. Kéo thả chuột mô phỏng **chưa được kiểm chứng trên Spark thật**; Spark có thể từ chối sự kiện giả lập.
+Tiện ích Chrome Manifest V3 để đọc, xem lại và điền các dạng bài tập được hỗ trợ. studymate có bộ điều hợp NGL / Spark, khả năng nhận diện thận trọng các điều khiển HTML gốc trên website khác, AI dự phòng có cấu hình, bốn phong cách giao diện và Inspector chỉ đọc.
 
-## v0.7.4 — Thử nghiệm điền bài sắp xếp từ
+[English](README.md) · [Kho mã nguồn](https://github.com/imnwngr/spark-study-assistant) · [Lịch sử thay đổi](CHANGELOG.md)
 
-**Solve & fill** thử kéo thả các thẻ từ theo đáp án QTI và xác minh thứ tự hiển thị. Spark có thể từ chối sự kiện chuột mô phỏng; không tự ý đảo thứ tự DOM. **Submit & next** bị khóa đối với dạng này vì chưa xác minh được việc Spark lưu đáp án. Speaking/Writing không thay đổi.
+## Trạng thái phát hành
 
-<div align="center">
-  <img src="icons/icon128.png" alt="Biểu tượng Spark Study Assistant" width="90" height="90" />
+Manifest vẫn ở phiên bản **0.7.16**. **v0.8.0 mới là bản phát hành dự kiến, chưa được công bố hoặc xác minh đầy đủ.** Cây làm việc chứa các thay đổi đang phát triển, bao gồm tích hợp hoãn phát hành cần được loại khỏi bản công bố. Tài liệu không khẳng định số bài kiểm thử đạt hiện tại hoặc khả năng tương thích đã được xác nhận trên website có đăng nhập.
 
-  # Spark Study Assistant
+Tên dự án hiện tại là **studymate**. Kho GitHub và thư mục cục bộ hiện có vẫn mang tên `spark-study-assistant`. Các định danh cần giữ tương thích và tùy chọn đã lưu tiếp tục dùng tên cũ.
 
-  **Đọc đáp án từ bài tập trước. Chỉ dùng AI khi cần.**
+## Tính năng và môi trường hỗ trợ
 
-  Tiện ích Chrome giúp đọc, xem lại và điền đáp án cho những dạng bài được hỗ trợ trên National Geographic Learning Spark.
+| Thành phần | Triển khai hiện tại và giới hạn |
+| --- | --- |
+| NGL / Spark | Tìm bài trong các khung có quyền truy cập; ánh xạ QTI; xử lý ô văn bản, danh sách chọn, radio, chọn nhiều đáp án, sắp xếp từ và sửa từ. Khả năng hỗ trợ phụ thuộc cấu trúc bài cụ thể. |
+| Word Pool | Trả các thẻ đã điền bằng giao diện của website, xác nhận mọi ô trống rồi điền lại theo QTI. Bài có thể chỉnh sửa nhưng đã điền cũng chạy Trả hết → Điền lại. Việc xác định hộp gốc, ô đã có thẻ và trạng thái được giữ lại vẫn cần xem xét. |
+| Checkbox | Ánh xạ ID QTI và kiểm tra toàn bộ tập lựa chọn cuối cùng. Một điều kiện kiểm tra trong popup hiện có thể chặn đáp án chọn nhiều trước bước Apply. |
+| Linking Lines | Ánh xạ nhãn đầu nối duy nhất với cặp QTI rồi gửi thao tác nối. Bộ điều hợp chưa đọc được chính xác toàn bộ kết nối cuối cùng và trả trạng thái chưa chắc chắn. Đây chưa phải chức năng tự động giải đã được xác minh đầy đủ. |
+| Generic Multisite | Nhận diện ô văn bản, select, radio và checkbox HTML gốc trong nhóm bài có định danh rõ ràng. Tự động điền cần định danh phản hồi duy nhất và QTI nhúng tương thích. Điều khiển không hỗ trợ hoặc tham chiếu DOM cũ sẽ bị từ chối. |
+| Embedded QTI | Phân tích XML hoặc XML bọc trong JSON với giới hạn kích thước, không thực thi script. Đáp án khai báo trên trang không tự chứng minh nguồn phát hành đáng tin hoặc điểm số chính xác. |
+| AI và quy tắc ngoại tuyến | Luồng NGL hiện có có thể dùng nhà cung cấp tương thích OpenAI đã cấu hình hoặc bộ quy tắc ngoại tuyến hạn chế. Gợi ý Generic thiếu ánh xạ cục bộ đã kiểm tra không đủ điều kiện Apply. |
+| Giao diện | Ventrix, Chainsaw Editorial, Cognify và InsightOS; chế độ sáng, tối, theo hệ thống; tiếng Anh, Việt, Trung giản thể và Trung phồn thể. |
+| Inspector | Chụp trạng thái DOM và ghi tương tác có giới hạn, báo phạm vi khung, bằng chứng NGL chi tiết, cấu trúc điều khiển Generic và xuất JSON cục bộ. |
 
-  [![Chrome MV3](https://img.shields.io/badge/Chrome-Manifest_V3-4285F4?style=flat-square&logo=googlechrome&logoColor=white)](#cài-đặt)
-  [![Phiên bản](https://img.shields.io/badge/phiên_bản-0.7.14-8C83F4?style=flat-square)](CHANGELOG.md)
-  [![JavaScript](https://img.shields.io/badge/JavaScript-thuần-F7DF1E?style=flat-square&logo=javascript&logoColor=111)](#cấu-trúc-dự-án)
-  [![Kiểm thử](https://img.shields.io/badge/kiểm_thử-146_đạt-2A946A?style=flat-square)](#kiểm-thử)
-
-  [**Cài đặt**](#cài-đặt) · [**Cơ chế tìm đáp án**](#cơ-chế-tìm-đáp-án) · [**Cấu trúc**](#cấu-trúc-dự-án) · [**English**](README.md)
-</div>
-
----
-
-<div align="center">
-<table>
-<tr><td align="center"><img src="docs/screenshots/popup-glass-light.png" alt="Popup sáng" width="295" /></td><td align="center"><img src="docs/screenshots/popup-glass-dark.png" alt="Popup tối" width="295" /></td></tr>
-<tr><td align="center"><sub>Chế độ sáng</sub></td><td align="center"><sub>Chế độ tối</sub></td></tr>
-</table>
-</div>
-
-> [!NOTE]
-> Các ảnh giao diện sử dụng **dữ liệu mô phỏng**. Bộ đọc QTI đã được kiểm thử trong Chromium với dữ liệu XML mô phỏng năm câu lựa chọn và sáu ô nhập văn bản; chưa thể khẳng định mọi dạng bài hoặc mọi tài khoản Spark đều tương thích.
-
-## v0.7.3 — Review nhiều màn và xem đáp án sắp xếp từ
-
-Dựa trên **8 bản quét Spark thực tế bổ sung**, extension nhận diện dạng `orderInteraction` trong bài **Review Real life**. Khi các thẻ từ/dấu câu trên màn đang mở khớp chính xác với **một XML QTI duy nhất**, extension hiển thị câu theo thứ tự đúng. **Chưa tự kéo-thả**, vì chưa kiểm chứng được thao tác cập nhật trạng thái của Avallain. Solve & fill chỉ đưa ra đáp án để xem rồi bạn tự sắp xếp trên Spark; không tự nộp dạng này.
-
-Với bài **Review gồm 10 màn** có radio, bộ chọn XML giờ đối chiếu cả **chữ của phương án** và ID ổn định, tránh nhầm những màn đều dùng `C0_0`, `RESPONSE0`. Những câu khớp chắc chắn tiếp tục được tự chọn bằng adapter radio hiện có; trường hợp mơ hồ sẽ không đoán.
-
-**Speaking và toàn bộ Writing (kể cả Writing skill) vẫn được giữ nguyên.** Cơ chế nộp v0.7.2 không đổi. Đã kiểm thử **123/123 bài Node** và tương tác Chromium mô phỏng (5/5 radio, chọn đúng QTI theo màn sắp xếp); chưa xác nhận trên phiên Spark đăng nhập.
-
-## v0.7.2 — Sửa Submit & next theo kết quả chẩn đoán thực
-
-Báo cáo từ bài **1b | Grammar | 3** xác nhận Spark dùng nút **Submit to Gradebook** (`data-event="submit"`) để nộp bài, không phải nút **Check Answers** đang bị ẩn. Sau khi người dùng tự nhấn nộp, nút chuyển sang trạng thái không hoạt động sau khoảng 1,2 giây; nút **Next** (`forward_lo`) vẫn khả dụng.
-
-Extension hiện ưu tiên nút nộp của Spark, chỉ dự phòng Check Answers khi nút đó thực sự khả dụng. Trước khi nộp vẫn yêu cầu xác nhận, kiểm tra mọi câu đã điền và đối chiếu lại DOM. Chỉ yêu cầu chuyển bài khi thấy nút nộp đổi trạng thái và có **đúng một** nút Next đang hoạt động; tình huống mơ hồ thì dừng, không tự nộp lại. Có thể tắt tự chuyển bài trong Settings. **Nút bị vô hiệu hóa không chứng minh máy chủ đã lưu điểm.** Mới có một bài được chẩn đoán thực tế; các nhánh khác được kiểm thử bằng Chromium mô phỏng.
-
-## Bản v0.7.1 — Tối giản thao tác và sao chép đầy đủ đề bài
-
-Popup chỉ còn **Solve & fill**, **Sao chép đề** và nút **Submit & next** có kiểm tra an toàn. Hai nút Solve và Fill selected answers riêng đã được bỏ. Sao chép đọc trực tiếp **màn hình đang mở** trên Spark: hướng dẫn, câu hỏi đầy đủ, ngân hàng từ và lựa chọn; không xuất câu trả lời đã nhập, khóa QTI hoặc màn hình ẩn.
-
-**Submit & next vẫn cần kiểm tra với bài Spark thật.** Luồng nộp/Next hiện dựa trên bản ghi thực từ một bài Grammar, không dựa trên suy đoán về nút Check Answers. Nếu không thấy xác nhận thay đổi giao diện, extension sẽ dừng và không tự nhấn Next.
-
-## Có gì mới ở v0.7.0 — Mở rộng QTI Adapter
-
-Bộ đọc QTI hiện hỗ trợ **radio (chọn một), checkbox (chọn nhiều), lựa chọn đảo thứ tự, nhiều cách viết đáp án văn bản và bài có nhiều màn hình**, ngoài dropdown và ô chữ đã có. Mỗi đáp án phải được xác minh bằng ID và cấu trúc QTI trên màn hiện tại.
-
-Bản nâng cấp dựa trên **13 báo cáo quét cấu trúc thực**, nhưng dữ liệu bài tập gốc không được đưa vào repository. Bộ quét và thao tác radio/checkbox đã chạy qua thử nghiệm Chromium cô lập; vẫn cần kiểm tra trên Spark đã đăng nhập.
-
-**Kéo-thả:** Bộ đọc có thể hiện các cặp từ/ô từ `gapMatchInteraction` để người dùng xem, nhưng **chưa tự kéo thả**. **Speaking và toàn bộ Writing (kể cả Writing skill)** được giữ nguyên và không bật adapter mới trong phiên bản này.
-
-**Wordbuilding:** Đáp án `play the piano|the piano` được hiểu là các biến thể hợp lệ, **không điền nguyên chuỗi có dấu `|`**. Các ô chỉ thiếu phần cuối từ như `s___` vẫn được điền chính xác `tay`, không phải `stay`. Với XML nhiều màn trùng Response ID, bộ đọc so ngữ cảnh câu trước khi quyết định; nếu không phân biệt được sẽ không đoán.
-
-[**Bảng tương thích & an toàn**](docs/QTI_ADAPTERS.md) · [**Kỹ thuật QTI**](docs/QTI_READER.md) · [**Changelog**](CHANGELOG.md)
-
-## Các phiên bản trước
-
-- **0.6.1** — Ngân hàng từ Wordbuilding và kiểm tra đáp án text nghiêm ngặt.
-- **0.6.0** — Đọc QTI trước API và tối ưu độ mượt.
-- **0.5.x** — Liquid Glass, Color Studio và sửa kích thước popup.
-
-## Cơ chế tìm đáp án
-
-```mermaid
-flowchart TD
-  A[Đọc bài Spark đang mở] --> B[Tìm data.js ở iframe bài tập]
-  B --> C{Có XML QTI hợp lệ?}
-  C -->|Có| D[Đọc correctResponse]
-  D --> E{ID và các lựa chọn khớp hoàn toàn?}
-  E -->|Có| F[Đáp án QTI đã xác minh]
-  E -->|Không| G[Câu chưa giải quyết]
-  C -->|Không| G
-  G --> H{Phương án dự phòng?}
-  H -->|Đã cấu hình AI| I[Chỉ gửi câu chưa khớp tới API]
-  H -->|Quy tắc cũ| J[Gợi ý từ bộ quy tắc giới hạn]
-  F --> K[Xem lại trong popup]
-  I --> K
-  J --> K
-  K --> L[Điền những ô được hỗ trợ]
-  L --> M[Tùy chọn Submit & Next có xác nhận]
-```
-
-Bộ đọc QTI **không** lấy đáp án bằng cách đoán tên trường (xem [tài liệu kỹ thuật](docs/QTI_READER.md)). Chỉ chấp nhận kết quả nếu XML có `responseDeclaration / correctResponse`, `responseIdentifier` hợp lệ và **toàn bộ danh sách lựa chọn** trùng với bài đang hiển thị. Hỗ trợ dropdown, radio, checkbox và ô nhập văn bản khi QTI khớp chắc chắn. Kéo-thả chỉ hiện cặp đáp án để xem, chưa tự thao tác; Speaking/Writing chưa mở rộng.
-
-Bộ đọc **không chạy/eval mã `data.js`**: chỉ phân tích chuỗi XML đã mã hóa trong nội dung JavaScript, với giới hạn origin, kích thước và cấu trúc. Dữ liệu QTI xử lý trong trình duyệt; **chỉ câu chưa ánh xạ được mới gửi tới API AI đã chọn**.
-
-| Tình huống | Cách xử lý |
-|---|---|
-| Tất cả ô đều khớp XML | **Không tốn lượt gọi API**; hiển thị `QTI đã xác minh` |
-| Một phần ô khớp | Giữ đáp án QTI; chỉ gửi câu còn lại tới bộ giải dự phòng |
-| Không có QTI hoặc QTI sai cấu trúc | Dùng Single AI, Compare AIs hoặc quy tắc cũ theo cài đặt |
-| Không xác minh được thao tác điền | Dừng, không tự nộp ngầm |
-
-## Các tính năng
-
-| | Chức năng |
-|---|---|
-| ◈ | **QTI Adapter**, gồm dropdown, radio, checkbox, text; xem cặp kéo-thả |
-| ↗ | **AI dự phòng**: nhiều hồ sơ API và so sánh mô hình |
-| ✓ | **Xem và sửa đáp án** trước khi điền |
-| ⌁ | **Điền có kiểm tra** với dropdown/ô nhập hỗ trợ |
-| ⇥ | **Check & Next (thử nghiệm)**: chỉ thực hiện khi người dùng xác nhận |
-| ◐ | **Liquid Glass**, sáng/tối/theo hệ thống, 9 màu, vòng màu và mã HEX |
-| 文 | **4 ngôn ngữ**: English mặc định, Tiếng Việt, 简体中文, 繁體中文 |
+Generic không đồng nghĩa với hỗ trợ mọi website. Widget tùy biến, khung không truy cập được, bài không rõ định danh và thiếu nguồn đáp án có thể khiến thao tác bị từ chối. Không quảng bá bộ điều hợp riêng đang hoãn phát hành là được hỗ trợ.
 
 ## Cài đặt
 
-1. Tải repository này hoặc chọn **Code → Download ZIP** trên GitHub.
-2. Mở **`chrome://extensions/`** trên Chrome/Chromium.
-3. Bật **Developer mode**, nhấn **Load unpacked**, chọn thư mục chứa `manifest.json`.
-4. Mở bài tập tại [NGL Spark](https://learn.eltngl.com/) và **tải lại tab Spark** sau khi cài hoặc cập nhật tiện ích.
-5. Mở extension, thao tác theo thứ tự **Quét → Giải → Xem lại → Điền**. Có thể chọn **Giải & điền** để chạy liên tiếp rồi kiểm tra kết quả trên Spark.
+1. Tải hoặc clone [kho mã nguồn hiện tại](https://github.com/imnwngr/spark-study-assistant).
+2. Mở `chrome://extensions` và bật **Developer mode**.
+3. Chọn **Load unpacked**, rồi chọn thư mục chứa `manifest.json`.
+4. Mở website học tập cần dùng. Sau khi cập nhật tiện ích, tải lại tiện ích và làm mới tab bài tập.
+5. Mở **studymate** từ thanh công cụ tiện ích.
 
-Không cần cài npm hoặc nhập khóa API để đọc đáp án QTI **khi dữ liệu bài tập tương thích**. Bạn cần khóa API/endpoint nếu muốn dùng AI cho các bài chưa có đáp án QTI hoặc ngoài phạm vi bộ quy tắc cũ.
+Runtime hiện tại dùng script thông thường và không cần bước build. Mã đã công bố trên kho có thể khác bản phát triển cục bộ này. Không giả định đã có bản tải v0.8.0.
 
-### Cấu hình AI dự phòng
+## Sử dụng
 
-Vào **Settings → AI connections**, thêm hồ sơ API và chọn model. Tại mục **Answers**, chọn **Single AI**, **Compare AIs** hoặc **Legacy rules**. Lựa chọn này chỉ được dùng **sau bước QTI**; một câu đã xác minh bằng QTI sẽ không phải gọi API.
+1. Mở bài tập và đợi tải xong.
+2. Mở studymate, dùng **Quét bài** để xem bài đã nhận diện.
+3. Chọn **Giải bài**. Popup đọc nguồn đáp án và gọi Apply cho kết quả đủ điều kiện.
+4. Kiểm tra trạng thái thực tế trên website cùng các kết quả chưa chắc chắn hoặc bị bỏ qua.
+5. Chỉ dùng **Hoàn tất và tiếp tục** khi nút được bật và bạn có ý định nộp bài.
 
-Hiện hỗ trợ endpoint theo giao thức OpenAI-compatible Chat Completions: OpenAI, OpenRouter, Groq, DeepSeek, Gemini tương thích, Ollama chạy bằng máy chủ local và endpoint tùy chỉnh. Chưa trực tiếp hỗ trợ Anthropic Messages hoặc OpenAI Responses API.
+Giải bài có thể chuyển màn hình trong cùng hoạt động NGL sau khi vượt qua các bước kiểm tra. Nộp vào sổ điểm là thao tác riêng do người dùng chủ động yêu cầu. Nút nộp đổi trạng thái không tự chứng minh điểm đã lưu. Bộ điều hợp Generic không hỗ trợ nộp bài hoặc tự chuyển trang.
 
-### Tùy chỉnh giao diện
+Cấu hình nhà cung cấp, ngôn ngữ, giao diện và tùy chọn chuyển bài trong **Cài đặt**. API là tùy chọn và có thể phát sinh phí. Lưu cấu hình nhà cung cấp để yêu cầu quyền truy cập endpoint. Lựa chọn phong cách giao diện được lưu tự động.
 
-<div align="center"><table><tr><td><img src="docs/screenshots/color-studio-light.png" width="410" alt="Bộ chọn màu sáng" /></td><td><img src="docs/screenshots/color-studio-dark.png" width="410" alt="Bộ chọn màu tối" /></td></tr></table></div>
+## Inspector
 
-Chọn **Sáng / Tối / Theo hệ thống**; dùng một trong chín màu có sẵn, nhập HEX, chọn qua vòng sắc độ và chỉnh cường độ nền. Các tùy chọn lưu trong `chrome.storage.local`. Hiệu ứng kính tập trung ở bề mặt chính để giảm tình trạng giật khi cuộn; những cài đặt hạn chế chuyển động hoặc độ trong suốt vẫn được tôn trọng.
+1. Mở Inspector từ studymate khi đang chọn đúng tab nguồn.
+2. Kiểm tra phạm vi khung và chỉ cấp quyền cho các origin bạn muốn kiểm tra.
+3. Chụp trạng thái hoặc bắt đầu ghi rồi thao tác thủ công.
+4. Dừng ghi; đọc cảnh báo về khung không truy cập được, dữ liệu bị cắt và thiếu trạng thái đầu/cuối.
+5. Xuất JSON và kiểm tra trước khi chia sẻ.
 
-## Cấu trúc dự án
+Inspector giữ nguyên tab nguồn đã chọn. Điều hướng trang chính dừng phiên; các thế hệ tài liệu của khung con được phân biệt. Phiên tự dừng sau ba phút. Inspector không giải, nộp, mô phỏng thao tác hoặc xác nhận đáp án đúng.
 
-```text
-spark-study-assistant/
-│
-├── manifest.json                 # Cấu hình Chrome MV3
-├── popup.html                    # Giao diện tiện ích
-├── popup.js                      # Quét → QTI → dự phòng → xem → điền
-├── options.html                  # Bố cục cài đặt
-├── options.js                    # Chọn API, ngôn ngữ, giao diện
-├── styles.css                    # Typography, màu, Liquid Glass, responsive
-├── appearance.js                 # Chế độ sáng/tối và nền
-├── color-studio.js               # Bộ màu, vòng màu, HEX
-├── i18n.js                       # Nội dung giao diện 4 ngôn ngữ
-│
-├── content.js                    # Quét DOM từng iframe, điền, chấm/chuyển
-├── qti.js                        # Phân tích data.js/XML và ánh xạ đáp án
-├── background.js                 # Gọi API khi cần
-├── providers.js                  # Cấu hình provider, so sánh model
-├── solver.js                     # Bộ quy tắc cũ (không phải LLM offline)
-│
-├── _locales/                     # Ngôn ngữ metadata tiện ích
-│   ├── en/  ├── vi/  ├── zh_CN/  └── zh_TW/
-├── icons/                        # Biểu tượng có sẵn
-├── docs/
-│   ├── screenshots/              # Ảnh giao diện minh họa
-│   ├── AUTOMATION_DISCOVERY.md   # Hướng dẫn thu thập DOM an toàn
-│   ├── QTI_ADAPTERS.md          # Tương thích QTI theo loại bài
-│   ├── QTI_READER.md            # Kiến trúc, kiểm tra và giới hạn QTI
-│   ├── WORD_BUILDING.md          # Ngân hàng từ và ô điền văn bản
-│   ├── GLASS_DESIGN.md           # Quyết định về chất liệu/giao diện
-│   └── ...                       # Tài liệu nghiên cứu trước đây
-├── tools/
-│   └── inspect-wordbuilding.js  # Lệnh Console chẩn đoán chỉ đọc
-└── tests/                        # Kiểm thử Node không cần thư viện ngoài
-    ├── qti-adapters.test.js      # Radio / checkbox / nhiều màn
-    ├── browser-adapters.html     # Bài thử Chromium cô lập
-    ├── qti.test.js               # XML, đáp án, lỗi ánh xạ, API dự phòng
-    ├── wordbuilding.test.js      # Ngữ cảnh ngân hàng từ và ô điền
-    ├── providers.test.js
-    ├── solver.test.js
-    ├── background.test.js
-    ├── appearance.test.js
-    ├── i18n.test.js
-    └── ui.test.js
-```
+Chọn `inspector-data/exports` trong kho mã nguồn khi trình duyệt hỗ trợ chọn thư mục. Quyền ghi có thể cần cấp lại. Nếu không, dùng Save As; trình duyệt không hỗ trợ trình chọn sẽ dùng cài đặt tải xuống. Tiện ích không tự suy ra đường dẫn tuyệt đối của kho hoặc tự cấp quyền hệ thống tệp.
 
-## Kiểm thử
+Tên tệp xuất, dấu nhận dạng schema và định danh thư mục đã lưu vẫn giữ tên Spark cũ để tương thích.
 
-Trên PowerShell, chạy một lần:
+Các trình phân tích cục bộ trong `tools/` là tiện ích phát triển tùy chọn, không phải thành phần runtime bắt buộc. Báo cáo và prompt được tạo chỉ là đề xuất cho bước phát triển riêng cần được cho phép.
 
-```powershell
-& {
-    Set-Location "$HOME\Downloads\spark-study-assistant"
-    node --test
-}
-```
+## Quyền truy cập
 
-Bộ **109 bài kiểm thử Node** kiểm tra mapping QTI, radio, checkbox, phương án text thay thế, bài nhiều màn, ô chỉ điền phần còn thiếu, API dự phòng và giao diện. Bài thử Chromium riêng xác nhận quét/chọn radio, checkbox và **từ chối điền vào màn cũ** sau khi chuyển màn. Đây là các bài thử mô phỏng; **chưa thay thế thử nghiệm Spark đang đăng nhập.**
+- **activeTab**: quyền tạm thời gắn với thao tác mở tiện ích của người dùng.
+- **scripting**: chèn script cần thiết vào khung có quyền truy cập.
+- **webNavigation**: tìm cấu trúc khung của tab.
+- **storage**: lưu tùy chọn và cấu hình nhà cung cấp cục bộ.
+- Quyền host hiện có bao gồm NGL, khung Avallain và origin API OpenAI đã khai báo.
+- Quyền HTTPS và localhost tùy chọn phục vụ endpoint hoặc khung được cho phép rõ ràng. Khai báo quyền tùy chọn không tự cấp quyền đó.
 
-## Quyền truy cập và giới hạn
+Khung khác origin có thể cần quyền riêng. Trang trình duyệt bị hạn chế, khung bị từ chối và Shadow DOM đóng không truy cập được.
 
-- Chỉ đọc nội dung bài trong những iframe Spark được cấp quyền; parser QTI không fetch script khác origin.
-- Chỉ câu chưa ánh xạ mới được đưa vào payload API đã chọn; không cố ý gửi cookie, token hoặc URL assignment.
-- API key lưu trong Chrome local storage, **không phải kho bí mật có mã hóa chuyên biệt**; tuyệt đối không đưa key vào Git.
-- **Check & Next** phải do bạn nhấn và xác nhận. `Check Answers` chưa được chứng minh là nút gửi điểm cuối cùng trong mọi loại bài. Xem [hướng dẫn kiểm tra](docs/AUTOMATION_DISCOVERY.md).
-- Không có telemetry, không tải framework UI từ Internet, không có LLM offline hay cơ sở dữ liệu kiến thức lớn.
+## Quyền riêng tư và dữ liệu cục bộ
 
----
+Khóa API và cấu hình được lưu trong Chrome local storage; đây không phải kho bí mật được bảo vệ tuyệt đối. Lệnh gọi API gửi câu hỏi và lựa chọn tới nhà cung cấp đã chọn. Chế độ ngoại tuyến không thực hiện các lệnh gọi nhà cung cấp đó.
 
-<div align="center">
-  <strong>Ít phỏng đoán hơn. Nhiều đáp án có thể kiểm chứng hơn.</strong><br />
-  <sub>Dự án độc lập, không trực thuộc hoặc được National Geographic Learning, Spark hay Avallain chứng thực.</sub><br /><br />
-  <a href="README.md">English README</a> · <a href="CHANGELOG.md">Changelog</a> · <a href="docs/AUTOMATION_DISCOVERY.md">Giới hạn tự động hóa</a>
-</div>
+Inspector không chủ động đọc cookie, kho xác thực hoặc mô hình nội bộ của ứng dụng. Giá trị có thể nhập được che đi, nhưng tệp xuất **không được bảo đảm đã ẩn danh**: nội dung bài NGL, đáp án đã chọn, định danh DOM, tiêu đề và đường dẫn URL có thể còn lại. Generic ghi cấu trúc điều khiển và trạng thái lựa chọn. Tránh ghi trang nhạy cảm và kiểm tra mọi tệp trước khi chia sẻ.
 
+Một số chẩn đoán lỗi Solve hiện có thể chứa nội dung đáp án. Đây là vấn đề riêng tư còn tồn tại, không phải cam kết log đã được làm sạch.
 
-### Exercise Inspector (v0.7.8)
+Không đưa bản ghi, báo cáo, prompt, hồ sơ trình duyệt, ảnh chụp, log, thông tin xác thực hoặc tệp kiểm tra cục bộ vào commit và gói phát hành. `.gitignore` không kiểm soát mọi cách tạo ZIP; cần danh sách tệp production được duyệt.
 
-Mở popup extension, chọn nút Inspector. Tại tab mới, bấm **Capture screen** cho từng màn hình của bài Spark, rồi **Export JSON**. Công cụ chỉ đọc dữ liệu và không tự tải báo cáo lên mạng; hãy kiểm tra nội dung bài và câu trả lời trong JSON trước khi chia sẻ.
+## Giới hạn đã biết
 
-### v0.7.12: Ghi tương tác và nhận diện iframe tin cậy
+- Linking Lines chưa xác minh chính xác toàn bộ kết nối cuối cùng.
+- Kiểm tra nhiều đáp án checkbox cần được sửa để sử dụng ổn định từ đầu đến cuối.
+- Popup hiện có thể chọn nhầm khi có nhiều khung bài tập.
+- Generic Apply cần ánh xạ nhúng riêng; gợi ý AI hoặc nhập tay chưa đủ.
+- Khi DOM Generic bị thay thế, tiện ích thường từ chối an toàn và yêu cầu quét lại.
+- Word Pool cần kiểm tra thực tế việc trả về hộp gốc và giả định thứ tự ô đích.
+- Kiểm thử mô phỏng không chứng minh hoạt động trên website có đăng nhập hoặc điểm đã lưu.
+- Cây làm việc còn tích hợp riêng đang hoãn phát hành; ZIP toàn bộ thư mục không phải bản phát hành hợp lệ.
 
-Inspector hiển thị số iframe truy cập được, tự chờ và gắn bộ ghi khi tìm thấy widget `ic-text-correction`, theo dõi iframe xuất hiện trễ và báo rõ khi bản ghi không có thao tác sửa từ. JSON xuất ra chứa chẩn đoán iframe để điều tra lỗi. Chức năng Solve không thay đổi.
+## Phát triển và đóng góp
 
-### v0.7.10: Inspector ghi lại thao tác sửa từ
+Runtime nằm trong `core/`, `adapters/`, `solvers/` và `answer-sources/`. Popup điều phối Quét → Giải → Điền. Khi ghi theo yêu cầu, Inspector hoạt động độc lập với Solve.
 
-Mở Exercise Inspector từ popup → **Start recording** → quay lại Spark, **chọn từ sai, nhập từ sửa và xác nhận thủ công** → trở về Inspector → **Stop recording** → **Export JSON**. Có thể Capture screen trước/sau. Recorder chỉ đọc sự kiện, theo dõi ô nhập/menu xuất hiện tạm thời; không tự sửa, không nộp hoặc chuyển screen. Tự dừng sau ba phút, giới hạn dung lượng, không lấy mật khẩu. Hãy kiểm tra dữ liệu JSON trước khi chia sẻ. Adapter tự sửa từ vẫn **chưa được xác minh trên Spark thật**.
+Đọc mã hiện tại và phạm vi sở hữu tệp trước khi chỉnh sửa. Giữ nguyên thay đổi không liên quan. Ưu tiên bản vá nhỏ và phân biệt quan sát với giả thuyết. Có thể dùng kiểm thử và fixture cục bộ, nhưng chúng bị loại khỏi các commit phát hành đang đề xuất và gói runtime.
 
-### v0.7.9: Radio Review và sửa từ sai
+Sau khi được cho phép, chạy kiểm thử Node tập trung và fixture trình duyệt cho hành vi thay đổi, rồi kiểm tra đúng tập mã được chọn. Trình chạy trình duyệt và trình phân tích có thể tạo tệp cục bộ. Kiểm thử có đăng nhập và xác nhận rõ ràng **TEST OK** vẫn là điều kiện trước khi duyệt phát hành.
 
-Đọc nhãn thật của radio để không lẫn dấu chấm trang trí khi đối chiếu QTI. Dạng `ic-text-correction.replace` chỉ được xử lý khi QTI khớp duy nhất từng từ sai với cặp lựa chọn tương ứng; thao tác thử sử dụng điều khiển gốc của Spark, không tự sửa DOM. Chưa xác nhận hành vi trên Spark thật, vì vậy khi không tìm thấy lựa chọn an toàn extension sẽ dừng; không tự Next đối với dạng sửa từ này. Các dạng Writing/Speaking còn lại vẫn không tự giải.
+## Ghi nhận và giấy phép
 
-### v0.7.14: Khôi phục từ từng bị sửa sai
+Kho mã nguồn vẫn ở [imnwngr/spark-study-assistant](https://github.com/imnwngr/spark-study-assistant). NGL / Spark là tên nền tảng học tập bên ngoài, không phải tên mới của tiện ích.
 
-Nếu bản cũ để lại `Current Date: Student`, v0.7.13 có thể không tìm thấy đáp án QTI và không chạy Solve. v0.7.14 đối chiếu **toàn bộ câu** với QTI để định vị chính xác từng ô sửa; chỉ tự khôi phục một từ lệch đáp án khi Spark đã đánh dấu chính ô đó là `modified`. Các từ cố định phải khớp hoàn toàn. Đã kiểm thử với giao diện Spark mô phỏng; chưa khẳng định kết quả chấm trên Spark thật.
-
-### v0.7.13: Sửa nhầm từ do chữ hoa/chữ thường
-
-Trong bài **Review | Writing skill | 1e**, từ sai `Occupation` ở dòng ngày sinh phải phân biệt với từ đúng `occupation` ở dòng nghề nghiệp. Bản này gắn cặp đáp án QTI với **vị trí từ cụ thể**, kiểm tra toàn bộ từ sau mỗi lần sửa và thử hồi quy khi bấm **Solve** nhiều lần. Nếu bản cũ đã đổi dòng cuối thành “Current Date: Student”, cần khôi phục thủ công từ `qualifications` hoặc `occupation` (hoặc xóa đáp án bài tập) trước khi thử bản mới. Kiểm tra DOM không thay thế kết quả chấm của Spark.
-
-### Exercise Inspector tổng quát (v0.7.15)
-
-Mở Inspector từ popup. Dùng **Capture screen** để chụp cấu trúc bài, hoặc **Start recording** → thao tác thủ công trên Spark → **Stop recording** → **Export JSON**. Trình ghi hiện theo dõi mọi loại `.interaction` và tự lưu cấu trúc trước/sau, kể cả radio, dropdown, Pronunciation và kéo-thả. Với bài có nhiều screen, chụp hoặc ghi từng screen riêng. Hãy kiểm tra JSON trước khi chia sẻ: dữ liệu có nội dung bài và giá trị đã nhập. Ghi được sự kiện **không đồng nghĩa** chức năng Solve đã hỗ trợ hoặc Spark đã chấm đúng.
-
-### Điền cụm từ từ ngân hàng (v0.7.16)
-
-Với bài `om-text-gap`, Solve có thể đặt cụm từ theo ánh xạ `gapMatchInteraction` đã xác minh bằng QTI: nhấn cụm từ rồi nhấn ô trống. Chỉ thực hiện nếu nhãn trong ngân hàng, số ô trống và dữ liệu QTI của screen trùng khớp. Không ghi đè ô đã điền sai, không chỉnh DOM giả hoặc khẳng định đã chấm điểm. Hỗ trợ một số bài Real life và Writing skill dạng biểu mẫu, không xử lý bài viết tự do.
+Không tìm thấy tệp giấy phép độc lập trong kho đã xem xét. Đổi tên không bổ sung giấy phép hoặc quyền phân phối mới. Giữ nguyên thông báo hiện có và làm rõ giấy phép với chủ kho trước khi phân phối lại.

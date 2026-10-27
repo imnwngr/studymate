@@ -1,0 +1,9 @@
+.popup .site-status {
+  margin: 0;
+  padding: 8px 4px;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}

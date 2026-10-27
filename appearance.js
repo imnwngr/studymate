@@ -1,4 +1,4 @@
-/* Spark Appearance · local-only wallpaper controls. No external runtime. */
+/* studymate appearance · local-only wallpaper controls. No external runtime. */
 (() => {
   'use strict';
   const DEFAULT_COLOR = '#90adce';

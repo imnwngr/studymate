@@ -1,5 +1,5 @@
 <!doctype html>
-<html class="popup-document" lang="en" data-theme="system"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta name="color-scheme" content="light dark"/><title>Spark Study Assistant</title><link href="styles.css" rel="stylesheet"/></head>
+<html class="popup-document" lang="en" data-theme="system"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta name="color-scheme" content="light dark"/><title>studymate</title><link href="styles.css" rel="stylesheet"/><link href="themes.css" rel="stylesheet"/><link href="site-status.css" rel="stylesheet"/><script src="visual-style.js"></script></head>
 <body class="popup">
 <svg aria-hidden="true" class="icon-defs" xmlns="http://www.w3.org/2000/svg">
 <symbol id="icon-settings" viewbox="0 0 24 24"><path d="M12 3.4v2M12 18.6v2M20.6 12h-2M5.4 12h-2M18.1 5.9l-1.4 1.4M7.3 16.7l-1.4 1.4M18.1 18.1l-1.4-1.4M7.3 7.3 5.9 5.9"></path><circle cx="12" cy="12" r="4"></circle></symbol>
@@ -10,26 +10,29 @@
 <symbol id="icon-copy" viewbox="0 0 24 24"><rect height="12" rx="2" width="12" x="8" y="8"></rect><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"></path></symbol>
 </svg>
 <main class="popup-shell"><header class="app-header"><span class="app-header-topline" aria-hidden="true"></span>
-  <div class="app-identity"><img alt="" class="app-icon" src="icons/icon48.png" width="42" height="42"/><div class="app-name-group"><strong>Spark Assistant</strong><span data-i18n="appSubtitle">Your study companion</span></div></div>
+  <div class="app-identity"><img alt="" class="app-icon" src="icons/icon48.png" width="42" height="42"/><div class="app-name-group"><strong>studymate</strong><span data-i18n="appSubtitle">Your study companion</span></div></div>
   <div class="header-side"><span class="header-version">0.7.16</span><button id="inspector" class="icon-button" type="button" title="Exercise Inspector" aria-label="Open Exercise Inspector"><svg class="ui-icon"><use href="#icon-scan"></use></svg></button><button id="scan" class="icon-button" type="button" data-i18n-title="scan" aria-label="Scan page"><svg class="ui-icon"><use href="#icon-scan"></use></svg></button><button id="settings" class="icon-button" type="button" data-i18n-title="settings" aria-label="Settings"><svg class="ui-icon"><use href="#icon-settings"></use></svg></button></div>
 </header>
+<p id="siteStatus" class="site-status" role="status" aria-live="polite"></p>
 <section aria-labelledby="welcomeTitle" class="welcome-panel"><span class="glass-flare" aria-hidden="true"></span>
   <div class="welcome-content"><span class="eyebrow"><span class="live-dot"></span><span id="modeLabel" data-i18n="ready">Ready to help</span></span><h1 id="welcomeTitle" data-i18n="heroTitle">One question at a time.</h1><p data-i18n="heroDetail">Read the open exercise, review answers, then fill them on Spark.</p></div>
 </section>
+<div class="section-heading"><div class="section-heading-copy"><span class="overline-small" data-i18n="openExercise">CURRENT EXERCISE</span><h2 id="title">Exercise</h2><p id="count"></p></div><span class="session-decoration" aria-hidden="true">↗</span></div>
 <div class="session-meta">
 <ol id="progressTrack" class="progress-track" aria-label="Exercise progress"><li class="progress-step is-current" data-phase="scan"><span class="progress-number">1</span><span data-i18n="stepRead">Read</span></li><li aria-hidden="true" class="progress-divider"></li><li class="progress-step" data-phase="solve"><span class="progress-number">2</span><span data-i18n="stepSolve">Solve</span></li><li aria-hidden="true" class="progress-divider"></li><li class="progress-step" data-phase="apply"><span class="progress-number">3</span><span data-i18n="stepFill">Fill</span></li></ol>
-<p id="status" class="status" role="status" aria-live="polite"><span aria-hidden="true" class="status-indicator"></span><span class="status-message" data-i18n="statusStarting">Getting ready…</span></p>
+<p id="status" class="status" role="status" aria-live="polite"><span aria-hidden="true" class="status-indicator"></span><span class="status-message">Getting ready…</span></p>
 </div>
-<section id="emptyState" class="empty-state"><strong data-i18n="emptyTitle">Your exercise will appear here</strong><p data-i18n="emptyDescription">Open an assignment on Spark, then scan the page to begin.</p></section>
-<section id="results" class="results-section" hidden>
- <div class="section-heading"><div class="section-heading-copy"><span class="overline-small" data-i18n="openExercise">CURRENT EXERCISE</span><h2 id="title">Exercise</h2><p id="count"></p></div><span class="session-decoration" aria-hidden="true">↗</span></div>
- <div id="questions" class="questions" aria-label="Questions"></div>
- <details class="submission-guide"><summary data-i18n="reviewTitle">Before you submit</summary><p data-i18n="reviewText">Review the answers on Spark. Submission is always an explicit action.</p><p class="submit-hint" data-i18n="submitHint">Submit on Spark, then open the next exercise only after a verified UI-state transition.</p></details>
- <p id="fillReport" class="fill-report" aria-live="polite"></p>
-</section>
 <div class="action-dock" role="group" aria-label="Exercise actions">
  <button type="button" id="auto" class="button button-primary button-hero"><svg class="ui-icon"><use href="#icon-spark"></use></svg><span data-i18n="solveFill">Solve</span><svg class="ui-icon action-arrow"><use href="#icon-arrow"></use></svg></button>
  <div class="action-extras"><button type="button" id="copy" class="button button-subtle" data-i18n-title="copyPromptHint"><svg class="ui-icon"><use href="#icon-copy"></use></svg><span data-i18n="copyPrompt">Copy full exercise</span></button><button type="button" id="submitNext" class="button button-submit" disabled data-i18n-title="autoNotApplied"><svg class="ui-icon"><use href="#icon-check"></use></svg><span data-i18n="submitNext">Done &amp; next</span></button></div>
 </div>
+<section id="emptyState" class="empty-state"><strong data-i18n="emptyTitle">Your exercise will appear here</strong><p data-i18n="emptyDescription">Open an assignment on Spark, then scan the page to begin.</p></section>
+<section id="results" class="results-section" aria-labelledby="title" hidden>
+
+ <div id="questions" class="questions" aria-label="Questions"></div>
+ <details class="submission-guide"><summary data-i18n="reviewTitle">Before you submit</summary><p data-i18n="reviewText">Review the answers on Spark. Submission is always an explicit action.</p><p class="submit-hint" data-i18n="submitHint">Submit on Spark, then open the next exercise only after a verified UI-state transition.</p></details>
+ <p id="fillReport" class="fill-report" aria-live="polite"></p>
+</section>
+
 <footer class="popup-footer" data-i18n="privacyFooter">Your configured provider handles API requests.</footer>
-</main><script src="i18n.js"></script><script src="appearance.js"></script><script src="popup.js"></script></body></html>
+</main><script src="core/site-registry.js"></script><script src="core/frame-access.js"></script><script src="i18n.js"></script><script src="appearance.js"></script><script src="popup.js"></script></body></html>

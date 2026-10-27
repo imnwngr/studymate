@@ -20,15 +20,32 @@ function progress(phase){
 }
 function el(tag,className,text) {const node=document.createElement(tag); if(className)node.className=className;if(text!==undefined)node.textContent=text;return node;}
 const errString = e=>e?.message||String(e);
+// Local, bounded diagnostics: no answers, page URLs, tokens or credentials.
+function solveDiagnostic(stage, data) {
+  console.info('[Spark Solve]', stage, data);
+}
 async function sendFrame(frameId,message) {
-  try {return await chrome.tabs.sendMessage(state.tabId,message,{frameId});}
-  catch (err) {
-    // An extension added while the tab was already loaded has no content scripts there.
-    try {
-      await chrome.scripting.executeScript({target:{tabId:state.tabId,frameIds:[frameId]},files:['qti.js','content.js']});
-      return await chrome.tabs.sendMessage(state.tabId,message,{frameId});
-    } catch {return {ok:false,error:errString(err)};}
+  const request=state.solveOperation?{...message,execution:{operationId:state.solveOperation,tabId:state.tabId,frameId}}:message;
+  const response=await SparkFrameAccess.send(chrome,state.tabId,frameId,request);
+  if(response?.execution){
+    state.executionTrace=response.execution;
+    if(state.loggedOperation!==response.execution.operationId){state.loggedOperation=response.execution.operationId;state.loggedSequence=0;}
+    for(const event of response.execution.events||[])if(event.sequence>state.loggedSequence){solveDiagnostic(event.stage,event);state.loggedSequence=event.sequence;}
   }
+  return response;
+}
+function showSiteStatus(tab,accessUnavailable=false){
+  const node=$('siteStatus');
+  if(!node)return;
+  const site=SparkSites.recognize(tab?.url);
+  const unavailable=accessUnavailable||!tab?.id||!SparkSites.access(tab?.url);
+  node.dataset.state=unavailable?'unavailable':site?'registered':'unregistered';
+  node.textContent=unavailable?t('siteAccessUnavailable'):site?
+    t('siteRegistered',{site:site.name}):t('siteUnregistered');
+}
+async function refreshSiteStatus(){
+  try{const [tab]=await chrome.tabs.query({active:true,currentWindow:true});showSiteStatus(tab);}
+  catch{showSiteStatus(null,true);}
 }
 async function scanPage() {
   $('scan').disabled=true;
@@ -41,13 +58,24 @@ async function scanPage() {
   status(t('scanning'));
   try {
     const [tab]=await chrome.tabs.query({active:true,currentWindow:true});
-    if (!tab?.id || !/^https:\/\/learn\.eltngl\.com\//.test(tab.url||'')) throw new Error(t('needSpark'));
+    showSiteStatus(tab);
+    if (!tab?.id || !SparkSites.access(tab.url)) throw new Error(t('siteAccessUnavailable'));
     state.tabId=tab.id;
-    const frames = await chrome.webNavigation.getAllFrames({tabId:tab.id});
+    if(state.solveOperation)solveDiagnostic('SCAN_STARTED',{operationId:state.solveOperation,tabId:state.tabId,frameId:null,result:'discovering-frames'});
+    let frames;
+    try{frames=await chrome.webNavigation.getAllFrames({tabId:tab.id});}catch{frames=null;}
     const targets=frames?.length?frames.map(f=>f.frameId):[0];
     const responses=await Promise.all(targets.map(async frameId=>({frameId,response:await sendFrame(frameId,{type:'SPARK_SCAN'})})));
     const candidates=responses.filter(x=>x.response?.ok && x.response.result?.questions?.length);
-    if(!candidates.length) throw new Error(t('noExercise'));
+    const inaccessible=responses.filter(x=>x.response?.reason==='accessUnavailable');
+    const failed=responses.filter(x=>!x.response?.ok&&x.response?.reason!=='accessUnavailable');
+    if(failed.length)solveDiagnostic('scan-failures',{frames:failed.slice(0,60).map(x=>({frameId:x.frameId,reason:x.response?.reason||'scanFailed'}))});
+    state.inaccessibleFrames=inaccessible.length;
+    if(!candidates.length){
+      if(inaccessible.length){showSiteStatus(tab,true);throw new Error(t('siteAccessUnavailable'));}
+      if(failed.length)throw new Error(t('siteScanFailed'));
+      throw new Error(t('noExercise'));
+    }
     candidates.sort((a,b)=>b.response.result.questions.length-a.response.result.questions.length);
     const selected=candidates[0];
     state.frameId=selected.frameId;
@@ -56,6 +84,12 @@ async function scanPage() {
     state.verifiedQti=false;
     state.title=selected.response.result.title;
     state.questions=selected.response.result.questions;
+    state.architecture=selected.response.result.architecture||null;
+    solveDiagnostic('architecture',{...state.architecture,inaccessibleFrames:inaccessible.length});
+    solveDiagnostic('scan', {frameId:state.frameId,title:state.title,
+      interactiveId:selected.response.result.frameUrl?.match(/\/(?:cdn_proxy|api\/interactives)\/([a-f0-9-]{36})\b/i)?.[1]||null,
+      candidates:candidates.length,questions:state.questions.slice(0,60).map(q=>({
+        id:q.id,kind:q.kind,applyable:q.applyable,gaps:q.gapCount,sources:q.poolLabels?.length}))});
     state.answers=new Map();state.solved=false;state.lastApplyVerified=false;$('submitNext').disabled=true;
     $('title').textContent=state.title;
     $('count').textContent=t('count',{n:state.questions.length,frame:state.frameId});
@@ -64,7 +98,7 @@ async function scanPage() {
     $('emptyState').hidden=true;
     progress('solve');
     render();
-    status(t('readReady'),'success');
+    status(t('readReady')+(inaccessible.length?' '+t('siteSomeFramesUnavailable'):''),'normal');
     return true;
   } catch(error) {status(errString(error),'error');return false;}
   finally {$('scan').disabled=false;}
@@ -89,14 +123,14 @@ function render() {
     const poly=document.createElementNS('http://www.w3.org/2000/svg','path');poly.setAttribute('d','m6 9 6 6 6-6');chevron.append(poly);
     end.append(badge,chevron);head.append(main,end);card.append(head);
     const body=el('div','question-body');
-    body.append(el('span','question-kind',t({dropdown:'kindDropdown',choice:'kindDropdown',multi:'kindDropdown',match:'kindManual',gapWordPool:'kindWordPool',text:'kindText',order:'kindOrder',correction:'kindCorrection',manual:'kindManual'}[q.kind]||'kindOther')));
+    body.append(el('span','question-kind',t({dropdown:'kindDropdown',choice:'kindDropdown',multi:'kindDropdown',checkbox:'kindDropdown',match:'kindManual',linkingLines:'kindManual',gapWordPool:'kindWordPool',text:'kindText',order:'kindOrder',correction:'kindCorrection',manual:'kindManual'}[q.kind]||'kindOther')));
     body.append(el('p','question-text',q.localContext||q.context));
     if(q.options?.length) body.append(el('p','options-preview',`${t('optionsLabel')}: ${q.options.join(' · ')}`));
     else if(q.wordBank) body.append(el('p','options-preview',`${t('optionsLabel')}: ${q.wordBank}`));
     const line=el('div','answer-line');
     const lbl=el('label','',t('answer'));lbl.setAttribute('for','answer-'+q.id);
     let input;
-    if(q.options?.length && q.kind!=='multi' && q.kind!=='match') {
+    if(q.options?.length && !['multi','checkbox','match','linkingLines'].includes(q.kind)) {
       input=el('select','answer-input');
       const blank=el('option','',`— ${t('chooseAnswer')} —`);blank.value=''; input.append(blank);
       for(const opt of q.options){const optEl=el('option','',opt);optEl.value=opt;input.append(optEl);}
@@ -133,7 +167,9 @@ function updateAnswers() {
     updateCardState(q.id,ans?.answer);
     let label=ans?.source==='qti'?t('qtiLabel'):ans?.source==='ai'?(ans.provider||'AI'):ans?.source==='compare'?t('compareAnswer'):ans?.source==='user'?t('yourChoice'):t('rules');
     note.textContent=ans ? `${label} · ${ans.confidence||'low'} · ${ans.source==='qti'?t('qtiExplanation'):(ans.explanation||'')}` : t('noAnswer');
-    if(!q.applyable) note.textContent+=' '+t('notAutoFill');
+    if(!q.applyable) note.textContent+=' '+t('notAutoFill')+
+      (q.linkingDiagnostics?' '+q.linkingDiagnostics.reason:'')+
+      (q.diagnostic?' '+q.diagnostic:'');
     if(ans && (!ans.answer || (ans.alternatives?.length>1))) $('card-'+q.id).open=true;
     alts.replaceChildren();
     for(const alternative of ans?.alternatives||[]) {
@@ -160,6 +196,9 @@ async function solve() {
     let qti=[];
     try {
       const read=await sendFrame(state.frameId,{type:'SPARK_QTI',ids:all.map(q=>q.id)});
+      solveDiagnostic('qti',{frameId:state.frameId,ok:read?.ok===true,
+        reason:read.result?.reason,answers:read.result?.answers?.length||0,
+        diagnostics:read.result?.diagnostics?.slice(0,20),error:read.error});
       if(read?.ok && Array.isArray(read.result?.answers))qti=read.result.answers;
     } catch { /* QTI is best effort; a missed key must not block AI fallback. */ }
     const trusted=new Map();
@@ -167,7 +206,7 @@ async function solve() {
     for(const answer of qti){
       const question=all.find(q=>q.id===answer.id);
       if(!question || trusted.has(answer.id) || !answer.answer)continue;
-      if(['choice','multi'].includes(question.kind)){
+      if(['choice','multi','checkbox'].includes(question.kind)){
         if(!answer.selectedIds?.length || !question.choiceIds?.length ||
           answer.selectedIds.some(id=>!question.choiceIds.includes(id)) ||
           !Array.isArray(answer.choiceOptions) || answer.choiceOptions.length!==question.choiceIds.length)continue;
@@ -178,10 +217,11 @@ async function solve() {
       trusted.set(answer.id,answer);
     }
     const remaining=all.filter(q=>!trusted.has(q.id));
+    const eligibleFallback=remaining.filter(q=>!['checkbox','linkingLines'].includes(q.kind));
     let fallback=null;
-    if(remaining.length){
+    if(eligibleFallback.length){
       try {
-        const response=await chrome.runtime.sendMessage({type:'SPARK_SOLVE',payload:{...payload,questions:remaining}});
+        const response=await chrome.runtime.sendMessage({type:'SPARK_SOLVE',payload:{...payload,questions:eligibleFallback}});
         if(!response?.ok)throw new Error(response?.error||t('solveFailed'));
         fallback=response.result;
       } catch(error) {
@@ -208,6 +248,7 @@ async function solve() {
     status(t('readyCount',{mode:label,n:complete,total:all.length})+
       (trusted.size===all.length?' '+t('qtiNoApi'):'')+
       (fallback?.warning?' '+fallback.warning:''),complete?'success':'normal');
+    solveDiagnostic('ANSWER_READY',{frameId:state.frameId,answers:complete,total:all.length,verifiedQti:state.verifiedQti});
     return complete>0;
   }catch(error){status(errString(error),'error');return false;}
 }
@@ -236,31 +277,40 @@ async function applyAnswers() {
     if(!answer || (a.source!=='user'&&a.confidence==='low')) {missing++;continue;}
     // Double check all option-backed answers before trying to click.
     if(q.options?.length && q.kind!=='multi' && q.kind!=='match' && !q.options.some(o=>normalized(o)===normalized(answer))) {missing++;continue;}
-    if(q.kind==='multi' && a.source==='qti' && (!Array.isArray(a.selectedIds)||
+    if(q.kind==='checkbox' && (a.source!=='qti'||!Array.isArray(a.selectedIds)||!a.selectedIds.length)) {missing++;continue;}
+    if(['multi','checkbox'].includes(q.kind) && a.source==='qti' && (!Array.isArray(a.selectedIds)||
       a.selectedIds.some(id=>!q.choiceIds?.includes(id)))){missing++;continue;}
+    if(q.kind==='linkingLines'&&(!q.applyable||a.source!=='qti'||!a.linkingVerified)){missing++;continue;}
     answers.push({id:q.id,answer,...(a.selectedIds?.length&&a.source==='qti'?{selectedIds:a.selectedIds}:{}),...(q.kind==='order'&&a.source==='qti'&&Array.isArray(a.orderedTokens)?{orderedTokens:a.orderedTokens}:{}),...(q.kind==='textCorrection'&&a.source==='qti'&&Array.isArray(a.corrections)?{corrections:a.corrections}:{}),...(q.kind==='gapWordPool'&&a.source==='qti'&&a.wordPoolVerified&&Array.isArray(a.pairs)?{pairs:a.pairs,wordPoolVerified:true}:{})});
   }
-  if(!answers.length){status(t('notReady'),'error');return;}
+  if(!answers.length){solveDiagnostic('APPLY_BLOCKED',{frameId:state.frameId,reason:'noEligibleAnswers',missing});status(t('notReady'),'error');return false;}
+  solveDiagnostic('APPLY_REQUESTED',{frameId:state.frameId,answers:answers.length,missing});
   progress('apply');status(t('filling'));
   try{
     const response=await sendFrame(state.frameId,{type:'SPARK_APPLY',answers});
     if(!response?.ok) throw new Error(response?.error||t('fillFailed'));
     const results=response.result;
+    solveDiagnostic('apply',{frameId:state.frameId,adapterId:state.architecture?.adapterId||'ngl',results:results.slice(0,60)});
     const filled=results.filter(x=>x.status==='filled').length;
     const manual=results.filter(x=>x.status==='manual').length;
     const uncertain=results.filter(x=>x.status==='uncertain').length;
-    $('fillReport').textContent=t('fillReport',{filled,manual,uncertain,skipped:missing+results.filter(x=>x.status==='skipped').length});
+    $('fillReport').textContent=t('fillReport',{filled,manual,uncertain,skipped:missing+results.filter(x=>x.status==='skipped').length})+
+      results.filter(x=>x.status!=='filled'&&x.detail).slice(0,3).map(x=>' '+String(x.detail).slice(0,240)).join('');
     status(t('fillDone',{n:results.length}),filled?'success':'normal');
     // Require a verified page-level apply, including all recognised gaps, before enabling submit.
     state.lastApplyVerified=missing===0 && results.length===state.questions.length &&
       results.every(x=>x.status==='filled') && !state.questions.some(q=>q.kind==='textCorrection');
-    $('submitNext').disabled=!state.lastApplyVerified;
+    solveDiagnostic(state.lastApplyVerified?'PLACEMENT_VERIFIED':'APPLY_BLOCKED',{frameId:state.frameId,filled,manual,uncertain,missing});
+    $('submitNext').disabled=!state.lastApplyVerified||
+      (state.architecture&&!state.architecture.capabilities.includes('verified-submit'));
     if(filled) { document.querySelector('[data-phase="apply"]')?.classList.add('is-done'); document.querySelector('[data-phase="apply"]')?.classList.remove('is-current'); }
     return state.lastApplyVerified;
-  }catch(error){status(errString(error),'error');return false;}
+  }catch(error){solveDiagnostic('APPLY_BLOCKED',{frameId:state.frameId,reason:'applyException',error:errString(error)});status(errString(error),'error');return false;}
 }
 async function autoSolveAndFill() {
   $('auto').disabled=true;
+  state.solveOperation='solve-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2);
+  state.lastApplyVerified=false;
   try {
     // Bounded intra-activity screen workflow; no learning-object navigation.
     const seen=new Set();
@@ -270,7 +320,7 @@ async function autoSolveAndFill() {
       const key=`${state.frameId}:${index}:${count}`;
       if(seen.has(key)){status('Screen did not advance; stopped safely.','error');break;}
       seen.add(key);
-      if(!(await solve()))break;
+      if(!(await solve())){solveDiagnostic('APPLY_NOT_REQUESTED',{reason:'solveNotReady',frameId:state.frameId});break;}
       if(!(await applyAnswers()))break;
       // QTI provides known keys. AI guesses or manual edits cannot establish correctness.
       // The correction widget can show the replacement without confirming
@@ -296,7 +346,10 @@ async function autoSolveAndFill() {
         break;
       }
     }
-  } finally {$('auto').disabled=false;}
+  } finally {
+    solveDiagnostic(state.lastApplyVerified?'SOLVE_COMPLETED':'SOLVE_ABORTED',{operationId:state.solveOperation,tabId:state.tabId,frameId:state.questions.length?state.frameId:null,result:state.lastApplyVerified?'popup-apply-verified':'popup-stopped'});
+    $('auto').disabled=false;
+  }
 }
 
 async function submitAndNext(){
@@ -337,9 +390,11 @@ async function showMode(){
 }
 async function initialize(){
   try {await I.load();await SparkAppearance.load();const stored=await chrome.storage.local.get(['autoNext']);state.autoNext=stored.autoNext!==false;}catch{}
-  await showMode();await scanPage();
+  await showMode();await refreshSiteStatus();await scanPage();
 }
 chrome.storage.onChanged?.addListener((changes,area)=>{if(area==='local'&&(changes.uiLanguage||changes.uiTheme||changes.uiBackdropColor||changes.uiBackdropStrength)){
-  Promise.all([I.load(),SparkAppearance.load()]).then(()=>{showMode();if(state.questions.length){render();updateAnswers();$('count').textContent=t('count',{n:state.questions.length,frame:state.frameId});}}).catch(()=>{});
+  Promise.all([I.load(),SparkAppearance.load()]).then(()=>{showMode();refreshSiteStatus();if(state.questions.length){render();updateAnswers();$('count').textContent=t('count',{n:state.questions.length,frame:state.frameId});}}).catch(()=>{});
 }});
+chrome.tabs.onActivated?.addListener(()=>{state.lastApplyVerified=false;$('submitNext').disabled=true;refreshSiteStatus();});
+chrome.tabs.onUpdated?.addListener((_tabId,change)=>{if(change.url){state.lastApplyVerified=false;$('submitNext').disabled=true;refreshSiteStatus();}});
 initialize();

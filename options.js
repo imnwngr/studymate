@@ -100,6 +100,12 @@ async function initialize(){
 for(const radio of document.querySelectorAll('input[name="aiMode"]')){
   radio.addEventListener('change',()=>{state.aiMode=currentMode();renderMode();markDirty();});
 }
+$('resetAppearance').addEventListener('click',async()=>{
+  state.uiTheme='system';$('uiTheme').value='system';I.setTheme('system');
+  colorStudio.set(SparkAppearance.DEFAULT_COLOR,SparkAppearance.DEFAULT_STRENGTH,true);
+  markDirty();
+  await SparkVisualStyle.reset();
+});
 $('uiLanguage').addEventListener('change',()=>{state.uiLanguage=$('uiLanguage').value;I.setLanguage(state.uiLanguage);render();document.dispatchEvent(new Event('spark-language-changed'));markDirty();});
 $('uiTheme').addEventListener('change',()=>{state.uiTheme=$('uiTheme').value;I.setTheme(state.uiTheme);markDirty();});
 $('autoNext').addEventListener('change',()=>{state.autoNext=$('autoNext').checked;markDirty();});
