@@ -8,7 +8,7 @@ const root=path.resolve(__dirname,'..');
 const read=name=>fs.readFileSync(path.join(root,name),'utf8');
 test('inspector scripts are registered on all exercise frames',()=>{
   const manifest=JSON.parse(read('manifest.json'));
-  assert.equal(manifest.version,'0.7.16');
+  assert.equal(manifest.version,'0.8.0');
   assert.equal(manifest.content_scripts[0].all_frames,true);
   assert.ok(manifest.content_scripts[0].js.includes('inspector-content.js'));
 });

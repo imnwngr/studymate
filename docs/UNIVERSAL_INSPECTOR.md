@@ -1,6 +1,6 @@
 # studymate Inspector (local v0.8.0 candidate)
 
-The installed version remains 0.7.16 until the user provides `TEST OK`.
+The extension version is 0.8.0. Inspector schema versions remain independent.
 
 ## Use
 

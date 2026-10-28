@@ -101,7 +101,7 @@ test('all established interaction families have a shared solver and unknown type
 test('manifest preserves least privilege and installs one ordered multi-frame runtime',()=>{
   const m=JSON.parse(source('manifest.json'));
   const baseline=JSON.parse(source('docs/agent-state/multisite-baseline.json'));
-  assert.equal(m.version,'0.7.16');assert.ok(baseline.hashes['manifest.json']);
+  assert.equal(m.version,'0.8.0');assert.ok(baseline.hashes['manifest.json']);
   assert.ok(m.permissions.includes('activeTab'));assert.ok(m.permissions.includes('scripting'));
   assert.ok(!m.host_permissions.includes('<all_urls>'));assert.ok(!m.host_permissions.includes('https://*/*'));
   assert.equal(m.content_scripts[0].all_frames,true);assert.ok(m.content_scripts[0].js.includes('inspector-content.js'));
