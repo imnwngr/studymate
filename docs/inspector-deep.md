@@ -4,7 +4,7 @@ Inspector observes the DOM. It does not solve, apply, submit, intercept handlers
 
 ## Exact live Chrome procedure
 
-1. Coordinate with the concurrent Solve session before reloading the unpacked extension. In chrome://extensions, reload the existing Spark Study Assistant extension, then refresh the authenticated Spark exercise tab so the new Inspector content script is installed. An already-installed listener intentionally ignores reinjection; reopening Inspector alone does not upgrade that tab.
+1. Coordinate with the concurrent Solve session before reloading the unpacked extension. In chrome://extensions, reload the existing studymate extension, then refresh the authenticated Spark exercise tab so the new Inspector content script is installed. An already-installed listener intentionally ignores reinjection; reopening Inspector alone does not upgrade that tab.
 2. Open **1d | Real life | 1**. Open Inspector through the extension. Check Frame diagnostics: an accessible exercise frame must show interactionCount greater than zero. Dashboard/nullblank alone is insufficient.
 3. Select **Initial capture**, then **Capture screen**. Select **Manual reference interaction**, click **Start recording**, and wait for an attached exercise iframe. Perform one ordinary source selection and destination placement yourself. Wait at least two seconds after the last action; click **Stop recording**. This establishes observed behavior, not answer correctness.
 4. Restore the exercise to its initial state using Spark's normal controls yourself, if available; Inspector cannot restore it. Capture that initial state again. If restoration requires submission or another consequential operation, use a fresh authorized exercise session instead.

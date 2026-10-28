@@ -1,4 +1,4 @@
-# Spark — Agent Instructions
+# studymate — Agent Instructions
 
 ## UI/UX Workflow
 
@@ -19,7 +19,7 @@ For every UI/UX task:
 ## Design Priority
 
 1. Functional correctness and accessibility.
-2. Spark's DESIGN.md and visual identity.
+2. studymate's DESIGN.md and visual identity.
 3. Hallmark design guidance.
 4. Anti-slop quality checks.
 

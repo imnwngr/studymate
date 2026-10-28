@@ -12,7 +12,7 @@ The extension version is 0.8.0. Inspector schema versions remain independent.
 5. Review the export before sharing. Run the local analyzer if needed:
 
 ```powershell
-Set-Location 'C:\projects\spark-study-assistant'
+Set-Location 'C:\projects\studymate'
 node tools/analyze-inspector.cjs
 node --test --test-isolation=none tests/*.test.js tests/*.test.cjs
 node tests/run-browser-inspector-universal.cjs

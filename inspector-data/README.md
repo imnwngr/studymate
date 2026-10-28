@@ -1,11 +1,11 @@
-# Spark Inspector Intelligence (local only)
+# studymate Inspector Intelligence (local only)
 
 This directory is **inside the existing extension repository**. It stores Inspector recordings and offline analysis. Raw JSON files are **never modified** by the analyzer. `exports/`, `reports/`, and `prompts/` are ignored by Git; the `.gitkeep` files preserve their directory structure. Reports/prompts may contain exercise details; review before sharing.
 
 ## First use in Windows PowerShell
 
 ```powershell
-Set-Location 'C:\projects\spark-study-assistant'
+Set-Location 'C:\projects\studymate'
 node .\tools\analyze-inspector.cjs
 ```
 
@@ -13,15 +13,15 @@ Running this command **creates all three directories if missing** and analyzes a
 
 ## Export into the repository
 
-1. Load or reload the unpacked extension from this repository in Chrome, then open **Exercise Inspector** from Spark Study Assistant.
-2. Choose **Choose exports folder**, navigate to `C:\projects\spark-study-assistant\inspector-data\exports`, and authorize **read/write** access. Inspector checks the folder name is `exports`; Chrome does not expose its full path to the page, so **verify the path yourself in the picker**.
+1. Load or reload the unpacked extension from this repository in Chrome, then open **Exercise Inspector** from studymate.
+2. Choose **Choose exports folder**, navigate to `C:\projects\studymate\inspector-data\exports`, and authorize **read/write** access. Inspector checks the folder name is `exports`; Chrome does not expose its full path to the page, so **verify the path yourself in the picker**.
 3. Choose **Capture screen** and/or **Start recording** → interact in Spark → **Stop recording**. Choose **Export JSON**. The extension writes a unique JSON file to the selected directory and retains the handle using IndexedDB when available. Chrome may ask for write access again after closing/reopening Inspector.
 4. Run the analysis command above. Read `inspector-data/reports/index.json`, the per-hash `analysis-*.json` reports, and `inspector-data/prompts/prompt-*.md`.
 
 Chrome's File System Access API requires user selection and permissions. Some Chrome versions/policies disallow access to sensitive folders, including source folders; the extension cannot write to its installed directory by itself. If selection is rejected, use **Export JSON** with the browser's **Save As** dialog. Explicitly select `inspector-data/exports`. If the File System Access API is unavailable, the Export JSON click triggers the browser's normal download flow with a visible notice; the browser may put the file in Downloads. Import it using:
 
 ```powershell
-Set-Location 'C:\projects\spark-study-assistant'
+Set-Location 'C:\projects\studymate'
 node .\tools\analyze-inspector.cjs --import 'C:\path\spark-inspector-example.json'
 ```
 
@@ -30,7 +30,7 @@ Replace the example with the actual downloaded filename. The command copies byte
 ## Repeated analysis
 
 ```powershell
-Set-Location 'C:\projects\spark-study-assistant'
+Set-Location 'C:\projects\studymate'
 node .\tools\analyze-inspector.cjs
 Get-Content .\inspector-data\reports\index.json
 Get-ChildItem .\inspector-data\prompts\*.md

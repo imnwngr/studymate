@@ -122,7 +122,7 @@ The result contains bounded registration, adapter, solver, source-family, verifi
 From Windows PowerShell:
 
 ```powershell
-Set-Location 'C:\projects\spark-study-assistant'
+Set-Location 'C:\projects\studymate'
 node --test --test-isolation=none tests/*.test.js tests/*.test.cjs
 node tests/run-browser-wordpool.cjs
 node tests/run-browser-linking.cjs

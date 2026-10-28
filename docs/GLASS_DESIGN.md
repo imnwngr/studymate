@@ -2,7 +2,7 @@
 
 ## Product and context
 
-Spark Study Assistant is a small, opt-in workflow tool embedded in the Chrome extension surface, not a marketing website. Users need to identify the active exercise, inspect proposed answers, and deliberately decide whether to apply or check them. Settings must accommodate sensitive API configuration without implying that the app is handling credentials as a vault.
+studymate is a small, opt-in workflow tool embedded in the Chrome extension surface, not a marketing website. Users need to identify the active exercise, inspect proposed answers, and deliberately decide whether to apply or check them. Settings must accommodate sensitive API configuration without implying that the app is handling credentials as a vault.
 
 **User request:** Apple-inspired Liquid Glass, not a generic blue dashboard. Give the user full control of the background, similar to Discord's palette/advanced picker experience, without introducing remote runtime dependencies. Preserve all solving and submission safeguards.
 
