@@ -64,7 +64,7 @@ test('five-QTI-interaction correction is ranked against one visible correction w
 test('popup forwards only published correction pairs to the Spark UI',()=>{
   const fs=require('node:fs');const path=require('node:path');
   const script=fs.readFileSync(path.join(__dirname,'../popup.js'),'utf8');
-  const content=fs.readFileSync(path.join(__dirname,'../content.js'),'utf8');
+  const content=fs.readFileSync(path.join(__dirname,'../adapters/ngl.js'),'utf8');
   assert.match(script,/q\.kind==='textCorrection'&&a\.source==='qti'/);
   assert.match(script,/results\.every\(x=>x\.status==='filled'\) && !state\.questions\.some\(q=>q\.kind==='textCorrection'\)/);
   assert.match(content,/lastScan\.trustedCorrections\?\.get\(id\)/);
@@ -85,7 +85,7 @@ test('a previously corrected Spark token remains QTI-valid only when marked modi
 
 test('trace-backed correction adapter uses tc_popup input and OK instead of synthetic Enter',()=>{
   const fs=require('node:fs');const path=require('node:path');
-  const content=fs.readFileSync(path.join(__dirname,'../content.js'),'utf8');
+  const content=fs.readFileSync(path.join(__dirname,'../adapters/ngl.js'),'utf8');
   assert.match(content,/waitForUniqueCorrectionPopup/);
   assert.match(content,/\.tc_popup/);
   assert.match(content,/button-submit/);

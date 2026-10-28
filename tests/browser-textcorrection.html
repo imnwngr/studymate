@@ -34,7 +34,7 @@ widget.addEventListener('click',e=>{
   popup.append(heading,field,button);widget.append(popup);field.focus();
 });
 </script>
-<script src="../content.js"></script>
+<script src="../core/site-registry.js"></script><script src="../solvers/interactions.js"></script><script src="../solvers/sequence.js"></script><script src="../solvers/text-correction.js"></script><script src="../answer-sources/embedded-qti.js"></script><script src="../core/runtime.js"></script><script src="../adapters/ngl.js"></script><script src="../adapters/generic.js"></script><script src="../content.js"></script>
 <script>
 (async()=>{
   const send=message=>new Promise(resolve=>window.__listener(message,null,resolve));

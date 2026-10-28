@@ -91,10 +91,37 @@ test('JSON-escaped XML is decoded without evaluating script',()=>{
   assert.equal(answer.answers.length,1);
   assert.equal(answer.answers[0].answer,'rarely have');
 });
-test('legacy API is used only for missing QTI answers',()=>{
-  const popup=require('node:fs').readFileSync(require('node:path').join(__dirname,'../popup.js'),'utf8');
-  assert.match(popup,/type:'SPARK_QTI'/);
-  assert.match(popup,/const remaining=all\.filter\(q=>!trusted\.has\(q\.id\)\)/);
-  assert.match(popup,/if\(remaining\.length\)/);
-  assert.match(popup,/questions:remaining/);
+test('legacy API receives only eligible questions missing QTI answers',async()=>{
+  const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
+  const popup=fs.readFileSync(path.join(__dirname,'../popup.js'),'utf8');
+  const calls=[];
+  const questions=[
+    {id:'q1',kind:'text',context:'Published QTI',options:[]},
+    {id:'q2',kind:'text',context:'Missing QTI',options:[]},
+    {id:'q3',kind:'checkbox',context:'Checkbox',choiceIds:['C0_0','C0_1'],options:[]},
+    {id:'q4',kind:'linkingLines',context:'Links',options:[],applyable:false}
+  ];
+  const state={questions,title:'Synthetic activity',frameId:7,answers:new Map()};
+  const context={state,I:{language:'en'},$:()=>({disabled:false}),t:()=>'',
+    progress(){},status(){},solveDiagnostic(){},updateAnswers(){},render(){},
+    normalized:x=>String(x).trim().toLowerCase(),errString:e=>String(e),
+    sendFrame:async(frame,message)=>{
+      calls.push({frame,message});
+      return {ok:true,result:{answers:[{id:'q1',kind:'text',answer:'from QTI',source:'qti',confidence:'high'}]}};
+    },
+    chrome:{runtime:{sendMessage:async message=>{
+      calls.push({message});
+      return {ok:true,result:{answers:[{id:'q2',answer:'from API',source:'ai',confidence:'high'}]}};
+    }}}
+  };
+  const start=popup.indexOf('async function solve()');
+  const end=popup.indexOf('// Copy the complete current exercise',start);
+  assert.ok(start>=0&&end>start);
+  vm.runInNewContext(popup.slice(start,end)+';globalThis.runSolve=solve;',context);
+  assert.equal(await context.runSolve(),true);
+  assert.deepEqual(calls.map(call=>call.message.type),['SPARK_QTI','SPARK_SOLVE']);
+  assert.equal(calls[0].frame,7);
+  assert.deepEqual(Array.from(calls[1].message.payload.questions,q=>q.id),['q2']);
+  assert.deepEqual([...state.answers.keys()],['q1','q2']);
+  assert.equal(state.verifiedQti,false);
 });

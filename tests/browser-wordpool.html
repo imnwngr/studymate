@@ -20,36 +20,58 @@ window.fetch=async()=>({ok:true,headers:{get(){return String(source.length);}},t
 const marker=document.createElement('script');marker.type='text/plain';marker.src='/cdn_proxy/test/data.js';document.head.append(marker);
 let selected=null,actions=[];
 const widget=document.querySelector('.interaction.om-text-gap');
+const originals=new Map([...widget.querySelectorAll('.om-text-gap__pool-item')].map(li=>
+  [[...li.querySelectorAll('.om-text-gap__draggable')].find(card=>!card.closest('.width-measure')),li]));
+const captions=new Map([...widget.querySelectorAll('.om-text-gap__target-item')].map(gap=>[gap,gap.firstElementChild]));
 widget.addEventListener('click',e=>{
   const handle=e.target.closest('.om-text-gap__draggable-handle');
   if(handle){if(window.noHandle)return;
+    const card=handle.closest('.om-text-gap__draggable');
+    if(selected===card&&card.closest('.om-text-gap__target-item')&&!window.noReturn){
+      const home=[...widget.querySelectorAll('.om-text-gap__pool-item')].find(li=>
+        ![...li.querySelectorAll('.om-text-gap__draggable')].some(item=>!item.closest('.width-measure')))?.querySelector('.om-text-gap__droppable');
+      if(home){const gap=card.closest('.om-text-gap__target-item');home.appendChild(card);gap.prepend(captions.get(gap));card.classList.remove('selected');selected=null;
+        actions.push(['return',handle.textContent]);return;}
+    }
     if(selected)selected.classList.remove('selected');
-    selected=handle.closest('.om-text-gap__draggable');selected.classList.add('selected');actions.push(['select',handle.textContent]);return;
+    selected=card;selected.classList.add('selected');actions.push(['select',handle.textContent]);return;
   }
   const slot=e.target.closest('.om-text-gap__droppable');
   if(slot&&selected){
+    captions.get(slot.closest('.om-text-gap__target-item'))?.remove();
     slot.appendChild(selected);selected.classList.remove('selected');actions.push(['place',slot.closest('.om-text-gap__target-item').getAttribute('data-model-id')]);selected=null;
   }
 });
 </script>
-<script src="../content.js"></script>
+<script src="../core/site-registry.js"></script><script src="../solvers/interactions.js"></script><script src="../solvers/sequence.js"></script><script src="../solvers/text-correction.js"></script><script src="../answer-sources/embedded-qti.js"></script><script src="../core/runtime.js"></script><script src="../adapters/ngl.js"></script><script src="../adapters/generic.js"></script><script src="../content.js"></script>
 <script>
 (async()=>{
  if(window.prefillMode){
-   const index=window.prefillMode==='correct'?0:2;
-   widget.querySelectorAll('.om-text-gap__draggable-handle')[index].click();
-   widget.querySelectorAll('.om-text-gap__droppable')[0].click();
+   const prefill=window.prefillMode==='correct'?[[0,0]]:
+     window.prefillMode==='swap'?[[1,0],[0,1]]:
+     window.prefillMode==='cycle'?[[1,0],[2,1],[0,2]]:
+     window.prefillMode==='mixed'?[[0,0],[2,1]]:
+     window.prefillMode==='allCorrect'?[[0,0],[1,1],[2,2]]:[[2,0]];
+   for(const [sourceIndex,targetIndex] of prefill){
+     [...originals.keys()][sourceIndex].querySelector('.om-text-gap__draggable-handle').click();
+     widget.querySelectorAll('.om-text-gap__target-item .om-text-gap__droppable')[targetIndex].click();
+   }
  }
  const send=message=>new Promise(resolve=>window.__listener(message,null,resolve));
  const scan=await send({type:'SPARK_SCAN'});
  const qti=await send({type:'SPARK_QTI',ids:['q1']});
+ const firstStart=actions.length;
  const apply=await send({type:'SPARK_APPLY',answers:qti.result.answers});
+ const firstSolveActions=actions.slice(firstStart);
  const current=[...document.querySelectorAll('.om-text-gap__target-item')].map(x=>x.querySelector('.om-text-gap__draggable')?.textContent||'');
  const againScan=await send({type:'SPARK_SCAN'});
  const secondQti=await send({type:'SPARK_QTI',ids:['q1']});
+ const secondStart=actions.length;
  const secondApply=await send({type:'SPARK_APPLY',answers:secondQti.result.answers});
+ const secondSolveActions=actions.slice(secondStart);
+ const secondCurrent=[...document.querySelectorAll('.om-text-gap__target-item')].map(x=>x.querySelector('.om-text-gap__draggable')?.textContent||'');
  const result={againScan:againScan.result.questions.map(q=>q.kind),secondQti:secondQti.result.reason,secondApply:secondApply.result,scan:scan.result.questions.map(q=>({kind:q.kind,applyable:q.applyable,bank:q.poolLabels,gapCount:q.gapCount})),
-  qti:qti.result.reason,qtiDetails:qti.result,debug:(()=>{const files=SparkQTI.assessmentsFromDataJs(source,new DOMParser());return files.map(f=>({mapped:SparkQTI.mapAssessment(f.xml,scan.result.questions),signature:SparkQTI.signatureScore(f.xml,scan.result.questions),length:scan.result.questions[0].context.length,context:scan.result.questions[0].context}));})(),pairs:qti.result.answers[0]?.pairs?.map(p=>p.source),apply:apply.result,current,actions};
+  qti:qti.result.reason,qtiDetails:qti.result,debug:(()=>{const files=SparkQTI.assessmentsFromDataJs(source,new DOMParser());return files.map(f=>({mapped:SparkQTI.mapAssessment(f.xml,scan.result.questions),signature:SparkQTI.signatureScore(f.xml,scan.result.questions),length:scan.result.questions[0].context.length,context:scan.result.questions[0].context}));})(),pairs:qti.result.answers[0]?.pairs?.map(p=>p.source),apply:apply.result,current,secondCurrent,actions,firstSolveActions,secondSolveActions};
  document.body.append(Object.assign(document.createElement('pre'),{id:'test-result',textContent:JSON.stringify(result)}));
 })().catch(e=>document.body.append(Object.assign(document.createElement('pre'),{id:'test-error',textContent:String(e?.stack||e)})));
 </script></body></html>

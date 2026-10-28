@@ -12,12 +12,12 @@ class X{
  getElementsByTagName(tag){return this.children.flatMap(n=>[...(tag==='*'||tag===n.localName?[n]:[]),...n.getElementsByTagName(tag)]);}
 }
 const x=(name,attrs={},kids=[],text='')=>new X(name,attrs,kids,text);
-function fixture(bank=['A good idea','Another phrase'],pairs=['T1 G1','T0 G0']){
+function fixture(bank=['A good idea','Another phrase'],pairs=['T1 G1','T0 G0'],
+  sourceLabels=['A good idea','Another phrase']){
  const decl=x('responseDeclaration',{identifier:'R',baseType:'directedPair',cardinality:'multiple'},[
   x('correctResponse',{},pairs.map(t=>x('value',{},[],t)))]);
  const gap=x('gapMatchInteraction',{responseIdentifier:'R'},[
-  x('gapText',{identifier:'T0'},[],'A good idea'),
-  x('gapText',{identifier:'T1'},[],'Another phrase'),
+  ...sourceLabels.map((label,i)=>x('gapText',{identifier:`T${i}`},[],label)),
   x('p',{},[x('gap',{identifier:'G0'}),x('span',{},[],' test scenario some fixed words '),x('gap',{identifier:'G1'})])]);
  const xml=x('assessmentItem',{},[decl,x('itemBody',{},[x('p',{},[gap])])]);
  const q={id:'q1',kind:'gapWordPool',context:'A good idea Another phrase test scenario some fixed words',
@@ -46,13 +46,39 @@ test('word-pool does not accept QTI without all target directed pairs',()=>{
  const {xml,q}=fixture(undefined,['T0 G0']);
  assert.equal(Q.mapAssessment(xml,[q]).answers.length,0);
 });
+test('word-pool QTI accepts moved tiles or a retained full bank, with exact multiplicities',()=>{
+ const {xml,q}=fixture();
+ assert.equal(Q.mapAssessment(xml,[{...q,poolLabels:['A good idea','Another phrase','A good idea'],
+   wordPoolBankAlternatives:[['A good idea','Another phrase']]}]).reason,'complete');
+ assert.equal(Q.signatureScore(xml,[{...q,poolLabels:['A good idea','Another phrase','A good idea'],
+   wordPoolBankAlternatives:[['A good idea','Another phrase']]}])>0.55,true);
+ assert.equal(Q.mapAssessment(xml,[{...q,poolLabels:['Another phrase','A good idea']}]).reason,'complete');
+ for(const poolLabels of [['A good idea'],['A good idea','A good idea'],['Unknown','Another phrase']]){
+   const variant={...q,poolLabels,wordPoolBankAlternatives:[]};
+   assert.equal(Q.mapAssessment(xml,[variant]).answers.length,0);
+   assert.equal(Q.signatureScore(xml,[variant]),0);
+ }
+});
+test('word-pool QTI permits identical labels only with distinct source identifiers',()=>{
+ const {xml,q}=fixture(['A good idea','A good idea'],undefined,['A good idea','A good idea']);
+ assert.equal(Q.mapAssessment(xml,[q]).reason,'complete');
+ assert.deepEqual(Q.mapAssessment(xml,[q]).answers[0].pairs.map(p=>p.sourceId),['T0','T1']);
+ assert.equal(Q.mapAssessment(xml,[{...q,poolLabels:['A good idea','Another phrase']}]).answers.length,0);
+});
+test('word-pool QTI flags labels repeated by a distractor source',()=>{
+ const bank=['A good idea','Another phrase','A good idea'];
+ const {xml,q}=fixture(bank,undefined,bank);
+ const result=Q.mapAssessment(xml,[q]);
+ assert.equal(result.reason,'complete');
+ assert.deepEqual(result.answers[0].pairs.map(p=>p.labelAmbiguous),[true,false]);
+});
 test('word-pool adapter requires QTI pairs and verifies actual slot contents',()=>{
- const js=fs.readFileSync(path.join(__dirname,'../content.js'),'utf8');
+ const js=fs.readFileSync(path.join(__dirname,'../adapters/ngl.js'),'utf8');
  const popup=fs.readFileSync(path.join(__dirname,'../popup.js'),'utf8');
  assert.match(js,/wordPoolVerified/);
  assert.match(js,/const wordPoolGapText/);
  assert.match(js,/handle\.click\(\)/);
- assert.match(js,/slot\.click\(\)/);
+ assert.match(js,/currentSlot\.click\(\)/);
  assert.match(js,/trustedWordPool/);
  assert.match(popup,/wordPoolVerified:true/);
 });

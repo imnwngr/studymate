@@ -4,7 +4,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 const read=name=>fs.readFileSync(path.join(__dirname,'..',name),'utf8');
 test('intra-activity forwarding is bounded to known screens',()=>{
- const src=read('content.js');
+ const src=read('adapters/ngl.js');
  assert.match(src,/expectedIndex>=expectedCount-1/);
  assert.match(src,/availableActionControls\('forward'\)/);
  assert.match(src,/lastScan\.screenCount!==expectedCount/);

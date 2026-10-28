@@ -6,7 +6,7 @@
 <script>
 window.chrome={runtime:{onMessage:{addListener(fn){window.__listener=fn}}}};
 for(const node of document.querySelectorAll('[role="radio"],[role="checkbox"]'))node.addEventListener('click',()=>{const role=node.getAttribute('role');if(role==='radio')for(const x of node.parentNode.querySelectorAll('[role="radio"]')){const flag=x===node;x.setAttribute('aria-checked',String(flag));x.querySelector('input').checked=flag;}else{const flag=node.getAttribute('aria-checked')!=='true';node.setAttribute('aria-checked',String(flag));node.querySelector('input').checked=flag;}});
-</script><script src="../qti.js"></script><script src="../content.js"></script>
+</script><script src="../qti.js"></script><script src="../core/site-registry.js"></script><script src="../solvers/interactions.js"></script><script src="../solvers/sequence.js"></script><script src="../solvers/text-correction.js"></script><script src="../answer-sources/embedded-qti.js"></script><script src="../core/runtime.js"></script><script src="../adapters/ngl.js"></script><script src="../adapters/generic.js"></script><script src="../content.js"></script>
 <script>
 (async()=>{
  const send=message=>new Promise(resolve=>window.__listener(message,null,resolve));

@@ -101,15 +101,58 @@ test('two indistinguishable screens abstain safely',()=>{
   assert.equal(Q.fromDataJs(src,[input('q1','same [[1]] sentence.')],parser).reason,'ambiguousAssessment');
 });
 test('Writing and Speaking retain previous behavior; QTI adapter does not process them',()=>{
-  const code=fs.readFileSync(path.join(__dirname,'../content.js'),'utf8');
+  const code=fs.readFileSync(path.join(__dirname,'../adapters/ngl.js'),'utf8');
   assert.match(code,/deferredCategory/);
   assert.match(code,/reason:'deferredCategory'/);
 });
 test('live scanner keeps active page and stable checkbox/radio IDs',()=>{
-  const code=fs.readFileSync(path.join(__dirname,'../content.js'),'utf8');
+  const code=fs.readFileSync(path.join(__dirname,'../adapters/ngl.js'),'utf8');
   assert.match(code,/function activeContentRoot/);
   assert.match(code,/activity--hidden/);
   assert.match(code,/function choiceGroup/);
   assert.match(code,/function setChoice/);
   assert.match(code,/lastScan\.appliedChoiceIds/);
+});
+
+
+test('linking-lines QTI can explain pairs without authorizing DOM application',()=>{
+  const xml=item([x('responseDeclaration',{identifier:'R',cardinality:'multiple',baseType:'directedPair'},[
+    x('correctResponse',{},[x('value',{},[],'A B')])])],[
+    x('associateInteraction',{responseIdentifier:'R'},[
+      x('simpleAssociableChoice',{identifier:'A'},[],'source'),
+      x('simpleAssociableChoice',{identifier:'B'},[],'target')])]);
+  const q={...input('q1','Link sources to targets','linkingLines'),applyable:false};
+  const result=Q.mapAssessment(xml,[q]);
+  assert.deepEqual(result.answers[0].pairs,[{sourceId:'A',targetId:'B',source:'source',target:'target'}]);
+  assert.equal(q.applyable,false);
+  assert.equal(result.answers[0].wordPoolVerified,undefined);
+  assert.equal(Q.mapAssessment(xml,[{...q,applyable:true}]).answers.length,0);
+  xml.children[0].children[0].children[0].text='A MISSING';
+  assert.equal(Q.mapAssessment(xml,[q]).answers.length,0);
+});
+
+
+test('linking maps unique cell labels to QTI identities regardless of DOM or QTI order',()=>{
+  const declaration=x('responseDeclaration',{identifier:'R',cardinality:'multiple',baseType:'directedPair'},[
+    x('correctResponse',{},[x('value',{},[],'S2 T1'),x('value',{},[],'S1 T2')])]);
+  const interaction=x('associateInteraction',{responseIdentifier:'R'},[
+    x('simpleAssociableChoice',{identifier:'T2'},[],'Delta'),
+    x('simpleAssociableChoice',{identifier:'S1'},[],'Alpha'),
+    x('simpleAssociableChoice',{identifier:'T1'},[],'Gamma'),
+    x('simpleAssociableChoice',{identifier:'S2'},[],'Beta')]);
+  const xml=item([declaration],[interaction]);
+  const q={...input('q1','Link','linkingLines'),applyable:true,
+    linkingSources:['Beta','Alpha'],linkingTargets:['Delta','Gamma']};
+  const mapped=Q.mapAssessment(xml,[q]);
+  assert.equal(mapped.answers[0].linkingVerified,true);
+  assert.deepEqual(mapped.answers[0].pairs.map(p=>[p.source,p.target]),[['Beta','Gamma'],['Alpha','Delta']]);
+  for(const changed of [
+    {linkingSources:['Beta','Beta']},{linkingTargets:['Delta','Missing']},
+    {linkingSources:[]},{linkingSources:['Gamma','Delta'],linkingTargets:['Alpha','Beta']}
+  ])assert.equal(Q.mapAssessment(xml,[{...q,...changed}]).answers.length,0);
+  interaction.children.push(x('simpleAssociableChoice',{identifier:'S1'},[],'Alpha'));
+  assert.equal(Q.mapAssessment(xml,[q]).answers.length,0);
+  interaction.children.pop();
+  declaration.children[0].children[1].text='S1 T1';
+  assert.equal(Q.mapAssessment(xml,[q]).answers.length,0);
 });

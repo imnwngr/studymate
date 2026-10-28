@@ -64,7 +64,7 @@ test('QTI count mismatch does not guess current screen responses',()=>{
 });
 test('Wordbuilding word bank is passed to AI fallback and shown in popup',()=>{
   const base=path.join(__dirname,'..');
-  const content=fs.readFileSync(path.join(base,'content.js'),'utf8');
+  const content=fs.readFileSync(path.join(base,'adapters/ngl.js'),'utf8');
   const popup=fs.readFileSync(path.join(base,'popup.js'),'utf8');
   const provider=fs.readFileSync(path.join(base,'providers.js'),'utf8');
   assert.match(content,/function findWordBank\(/);

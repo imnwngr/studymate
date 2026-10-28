@@ -1,0 +1,55 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Unregistered quiz fixture</title></head><body>
+<main id="exercise"></main>
+<script>window.listenerCount=0;window.chrome={runtime:{onMessage:{addListener(fn){window.listenerCount++;window.__handler=fn;}}}};</script>
+<script src="../qti.js"></script><script src="../core/site-registry.js"></script><script src="../solvers/interactions.js"></script><script src="../solvers/sequence.js"></script><script src="../solvers/text-correction.js"></script><script src="../answer-sources/embedded-qti.js"></script><script src="../core/runtime.js"></script><script src="../adapters/ngl.js"></script><script src="../adapters/generic.js"></script><script src="../content.js"></script>
+<script>
+(async()=>{
+  const cases=[],area=document.getElementById('exercise');
+  const assert=(ok,message)=>{if(!ok)throw Error(message);};
+  const send=message=>new Promise(resolve=>window.__handler(message,null,resolve));
+  const field=(id,body)=>`<fieldset data-response-identifier="${id}"><legend>Question ${id}</legend>${body}</fieldset>`;
+  const textInteraction=id=>`<textEntryInteraction responseIdentifier="${id}"/>`;
+  const decl=(id,values,multiple=false)=>`<responseDeclaration identifier="${id}" cardinality="${multiple?'multiple':'single'}" baseType="${multiple?'identifier':'string'}"><correctResponse>${values.map(v=>`<value>${v}</value>`).join('')}</correctResponse></responseDeclaration>`;
+  const xml=(declarations,body)=>`<assessmentItem>${declarations}<itemBody>${body}</itemBody></assessmentItem>`;
+  function setup(html,qti){
+    area.innerHTML=html;
+    if(qti){const script=document.createElement('script');script.type='application/qti+xml';script.textContent=qti;area.append(script);}
+  }
+  async function scanAndKey(){const scan=await send({type:'SPARK_SCAN'});assert(scan.ok,scan.error);const key=await send({type:'SPARK_QTI',ids:scan.result.questions.map(q=>q.id)});assert(key.ok,key.error);return {scan:scan.result,key:key.result};}
+  async function apply(){const {scan,key}=await scanAndKey();assert(key.answers.length===scan.questions.length,'No complete mapping: '+JSON.stringify(key));const result=await send({type:'SPARK_APPLY',answers:key.answers});assert(result.result.every(x=>x.status==='filled'),JSON.stringify(result));return result;}
+  setup(field('R','<input type="text">'),xml(decl('R',['correct']),textInteraction('R')));
+  let result=await scanAndKey();assert(result.scan.architecture.adapterId==='generic','Unknown site must use generic');assert(!result.scan.architecture.registered,'Localhost must remain unregistered');cases.push('unknown site selects generic without pretending registered support');
+  await apply();assert(area.querySelector('input').value==='correct','Text not filled');cases.push('embedded QTI text uses shared text solver');
+  await apply();cases.push('repeat generic Solve verifies existing answer');
+  setup(field('R','<select><option value="one">One</option><option value="two">Two</option></select>'),xml('<responseDeclaration identifier="R" cardinality="single" baseType="identifier"><correctResponse><value>C2</value></correctResponse></responseDeclaration>','<inlineChoiceInteraction responseIdentifier="R"><inlineChoice identifier="C1">One</inlineChoice><inlineChoice identifier="C2">Two</inlineChoice></inlineChoiceInteraction>'));
+  await apply();assert(area.querySelector('select').value==='two','Dropdown failed');cases.push('native dropdown uses shared solver');
+  const choices=(type)=>`<label><input type="${type}" name="quiz" value="A">Alpha</label><label><input type="${type}" name="quiz" value="B">Beta</label>`;
+  const choiceXml=(multiple)=>xml(`<responseDeclaration identifier="R" cardinality="${multiple?'multiple':'single'}" baseType="identifier"><correctResponse><value>B</value></correctResponse></responseDeclaration>`,'<choiceInteraction responseIdentifier="R"><simpleChoice identifier="A">Alpha</simpleChoice><simpleChoice identifier="B">Beta</simpleChoice></choiceInteraction>');
+  for(const type of ['radio','checkbox']){
+    setup(field('R',choices(type)),choiceXml(type==='checkbox'));area.querySelector('input').checked=true;
+    await apply();assert(!area.querySelector('input').checked&&area.querySelectorAll('input')[1].checked,type+' state incorrect');cases.push('native '+type+' corrects prior selection through shared solver');
+  }
+  setup(field('R2','<input>')+field('R1','<input>'),xml(decl('R1',['first'])+decl('R2',['second']),textInteraction('R1')+textInteraction('R2')));
+  await apply();assert(area.querySelector('[data-response-identifier="R2"] input').value==='second','Response IDs lost');cases.push('response identity overrides QTI and DOM order differences');
+  setup(field('R','<input>'));result=await scanAndKey();assert(result.scan.questions.length===1&&result.key.answers.length===0,'Must discover without fabricating key');cases.push('compatible controls without answer source remain discoverable');
+  const blocked=await send({type:'SPARK_APPLY',answers:[{id:'q1',answer:'invented'}]});assert(blocked.result[0].status==='skipped','Unverified generic write accepted');cases.push('unverified mapping cannot mutate native control');
+  setup('<p>No exercise here</p>');result=await scanAndKey();assert(result.scan.questions.length===0,'Unknown content classified as exercise');cases.push('no recognized exercise is a graceful empty scan');
+  setup(field('R','<div role="combobox" tabindex="0">Custom</div>'));result=await scanAndKey();assert(!result.scan.questions.some(q=>q.applyable),'Unknown custom UI accepted');cases.push('unsupported custom semantics are not guessed');
+  setup(field('WRONG','<input>'),xml(decl('R',['correct']),textInteraction('R')));result=await scanAndKey();assert(result.key.reason==='responseIdentityMismatch','Incorrect ID accepted');cases.push('response mismatch abstains');
+  setup(field('R','<input>')+field('R','<input>'),xml(decl('R',['correct']),textInteraction('R')));result=await scanAndKey();assert(result.scan.questions.every(q=>!q.applyable),'Duplicate response accepted');cases.push('duplicate identities disable application');
+  setup(field('R','<input>'),'<assessmentItem><broken>');result=await scanAndKey();assert(result.key.reason==='invalidXml','Malformed XML accepted');cases.push('malformed answer source abstains');
+  setup(field('R','<input>'),'<!DOCTYPE assessmentItem [<!ENTITY x "unsafe">]><assessmentItem/>');result=await scanAndKey();assert(result.key.reason==='unsafeXml','DTD accepted');cases.push('untrusted XML entities rejected');
+  setup(field('R','<input>'),xml(decl('R',['correct']),textInteraction('R')));const extra=area.querySelector('script').cloneNode(true);area.append(extra);result=await scanAndKey();assert(result.key.reason==='ambiguousAnswerSource','Multiple sources accepted');cases.push('ambiguous assessments abstain');
+  setup(field('R','<input>'),xml(decl('R',['correct']),textInteraction('R')));result=await scanAndKey();area.querySelector('fieldset').remove();let stale=await send({type:'SPARK_APPLY',answers:result.key.answers});assert(stale.result[0].status!=='filled','Disconnected control accepted');cases.push('stale controls stop before writing');
+  setup(field('R','<input readonly>'),xml(decl('R',['correct']),textInteraction('R')));result=await scanAndKey();assert(!result.scan.questions[0].applyable&&result.key.answers.length===0,'Readonly control accepted');cases.push('readonly native fields remain non-editable');
+  setup(field('R',choices('radio')),choiceXml(false));result=await scanAndKey();area.querySelectorAll('input')[1].value='CHANGED';stale=await send({type:'SPARK_APPLY',answers:result.key.answers});assert(stale.result[0].status!=='filled'&&!area.querySelectorAll('input')[1].checked,'Changed identity accepted');cases.push('choice identity changes stop application');
+  setup(field('R','<input>'),xml(decl('R',['correct']),textInteraction('R')));result=await scanAndKey();area.querySelector('fieldset').append(document.createElement('input'));stale=await send({type:'SPARK_APPLY',answers:result.key.answers});assert(stale.result[0].status!=='filled','Unexpected new control accepted');cases.push('changed control inventory stops application');
+  setup(field('R','<input>'));const data=document.createElement('script');data.type='application/json';data.dataset.qti='';data.textContent=JSON.stringify({'quiz.xml':xml(decl('R',['correct']),textInteraction('R'))});area.append(data);await apply();assert(area.querySelector('input').value==='correct','Inert JSON QTI failed');cases.push('inert JSON QTI is parsed without executing content');
+  setup(field('R',choices('radio'))+'<label><input type="radio" name="quiz" value="outside" checked>Unrelated</label>',choiceXml(false));result=await scanAndKey();assert(!result.scan.questions[0].applyable&&area.querySelector('input[value="outside"]').checked,'Cross-scope radio group accepted');cases.push('radio groups cannot change unrelated controls outside the exercise');
+  const submit=await send({type:'SPARK_SUBMIT_NEXT',expected:1,goNext:true});assert(!submit.result.submitted,'Generic submission guessed');cases.push('generic submission and next remain unavailable');
+  const script=document.createElement('script');script.src='../content.js';await new Promise((resolve,reject)=>{script.onload=resolve;script.onerror=reject;document.body.append(script);});assert(window.listenerCount===1,'Duplicate listener');cases.push('reinjection does not duplicate message listener');
+  const frame=document.createElement('iframe');frame.src='browser-multisite-frame.html';await new Promise((resolve,reject)=>{frame.onload=resolve;frame.onerror=reject;document.body.append(frame);});
+  const child=await new Promise(resolve=>frame.contentWindow.__handler({type:'SPARK_SCAN'},null,resolve));assert(child.result.questions.length===1&&child.result.architecture.adapterId==='generic','Nested frame scan failed');cases.push('accessible nested iframe has independent runtime and discovery');
+  document.body.append(Object.assign(document.createElement('pre'),{id:'test-result',textContent:JSON.stringify({passed:cases.length,cases})}));
+})().catch(e=>document.body.append(Object.assign(document.createElement('pre'),{id:'test-error',textContent:e.stack||String(e)})));
+</script></body></html>

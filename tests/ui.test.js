@@ -24,8 +24,8 @@ test('compact popup has one solve and fill action and a complete-exercise copy',
   const script=read('popup.js');
   assert.match(script,/SPARK_COPY_PROMPT/);
   assert.doesNotMatch(script,/\$\('solve'\)|\$\('apply'\)/);
-  assert.match(read('content.js'),/function copyPrompt\(/);
-  assert.match(read('content.js'),/SPARK_COPY_PROMPT/);
+  assert.match(read('adapters/ngl.js'),/function copyPrompt\(/);
+  assert.match(read('adapters/ngl.js'),/SPARK_COPY_PROMPT/);
 });
 test('options retains all provider settings fields used by JS',()=>{
   for(const id of ['uiLanguage','uiTheme','autoNext','activeProfile','profilesList','profileEditor','profileName','provider','endpoint','model','apiKey','responseFormat','enabled','toggleKey','removeProfile','newProvider','addProfile','save','message']){
@@ -51,12 +51,14 @@ test('design supports system theme, reduced motion and compact popup',()=>{
 });
 test('popup sizing does not depend on its initial viewport width',()=>{
   assert.match(popup,/<html[^>]*class="popup-document"/);
-  const htmlRule=css.match(/html\.popup-document\s*\{([^}]+)\}/)?.[1]||'';
-  const bodyRule=css.match(/body\.popup\s*\{([^}]+)\}/)?.[1]||'';
-  assert.match(htmlRule,/min-width:388px/);
-  assert.match(bodyRule,/min-width:388px/);
+  const themeCss=read('themes.css');
+  const htmlRule=themeCss.match(/html\.popup-document\s*\{([^}]+)\}/)?.[1]||'';
+  const bodyRule=themeCss.match(/html body\.popup\s*\{([^}]+)\}/)?.[1]||'';
+  assert.match(htmlRule,/min-width:0/);
+  assert.match(htmlRule,/max-width:100%/);
+  assert.match(bodyRule,/min-width:0/);
   assert.doesNotMatch(bodyRule,/100vw|100vh/);
-  assert.match(bodyRule,/max-height:610px/);
+  assert.match(bodyRule,/max-height:640px/);
 });
 test('design version matches the extension manifest',()=>{
   const manifest=JSON.parse(read('manifest.json'));
@@ -81,7 +83,7 @@ test('all four UI languages and three themes are available',()=>{
   }
 });
 test('submission is opt-in, guarded and uses only known Spark controls',()=>{
-  const script=read('content.js');
+  const script=read('adapters/ngl.js');
   assert.match(script,/SPARK_SUBMIT_NEXT/);
   assert.match(script,/lastScan\.applied\.size!==expected/);
   assert.match(script,/availableActionControls\('check'\)/);
@@ -111,7 +113,7 @@ test('v0.7.5 passes trusted ordered QTI tokens to sequence adapter and submits d
 });
 
 test('v0.7.6 finishes long sequences in one Solve click with bounded settling and retry',()=>{
- const script=read('content.js');
+ const script=read('solvers/sequence.js');
  assert.match(script,/async function waitForSequenceStep\(/);
  assert.match(script,/Date\.now\(\)\+1800/);
  assert.match(script,/attempts\+\+>=2/);

@@ -1,0 +1,69 @@
+<!doctype html><html><head><meta charset="utf-8"><style>td{width:180px;height:45px}button{width:25px;height:25px}</style></head><body>
+<h1 class="learningObject__title">Synthetic | Writing skill | 1</h1>
+<div id="content_wrap_0" class="content-wrap"><div class="layout__content"></div></div>
+<script>window.chrome={runtime:{onMessage:{addListener(fn){window.request=(type,extra={})=>new Promise(resolve=>fn({type,...extra},null,response=>{if(!response.ok)throw Error(response.error);resolve(response.result);}));}}}};</script>
+<script src="/cdn_proxy/synthetic/data.js"></script><script src="/qti.js"></script><script src="/core/site-registry.js"></script><script src="/solvers/interactions.js"></script><script src="/solvers/sequence.js"></script><script src="/solvers/text-correction.js"></script><script src="/answer-sources/embedded-qti.js"></script><script src="/core/runtime.js"></script><script src="/adapters/ngl.js"></script><script src="/adapters/generic.js"></script><script src="/content.js"></script>
+<script>
+(async()=>{
+const assert=(v,m)=>{if(!v)throw Error(m);};
+const container=document.querySelector('.layout__content'),cases=[];
+let graph=new Map(),pressed=null,moves=0,gestures=0,rerender=false,stuck=false,missing=false;
+function render(duplicate=false){
+ const widget=document.createElement('section');widget.className='interaction is-linking-lines';
+ const table=document.createElement('table');
+ for(const [source,target] of [['Beta','Delta'],['Alpha','Gamma']]){
+  const row=table.insertRow();
+  for(const [side,label] of [['right',source],['left',target]]){
+   const cell=row.insertCell();cell.append(document.createTextNode(duplicate?'Same':label));
+   const handle=document.createElement('button');handle.className='isLinkingMultipleLines__handle '+side+'_handle';
+   handle.dataset.label=label;cell.append(handle);
+  }
+ }
+ widget.append(table);container.replaceChildren(widget);
+ if(missing)container.querySelector('button').remove();
+}
+container.addEventListener('mousedown',event=>{
+ const h=event.target.closest('button.right_handle');if(h){pressed=h.dataset.label;moves=0;}
+});
+container.addEventListener('mousemove',()=>{if(pressed)moves++;});
+container.addEventListener('mouseup',event=>{
+ const h=event.target.closest('button.left_handle');
+ if(pressed&&h&&moves){
+  gestures++;
+  if(!stuck){for(const [source,target] of graph)if(target===h.dataset.label)graph.delete(source);graph.set(pressed,h.dataset.label);}
+  if(rerender)render();
+ }
+ pressed=null;
+});
+const correct=()=>graph.size===2&&graph.get('Alpha')==='Delta'&&graph.get('Beta')==='Gamma';
+for(const [name,initial] of [
+ ['empty',[]],['incorrect',[['Alpha','Gamma']]],['swapped',[['Alpha','Gamma'],['Beta','Delta']]],
+ ['partial',[['Alpha','Delta']]],['already correct',[['Alpha','Delta'],['Beta','Gamma']]],
+ ['rerender',[['Alpha','Gamma'],['Beta','Delta']]],['unaccepted gesture',[]],['missing QTI',[]],
+ ['duplicate labels',[]],['endpoint disappears',[]]]){
+ graph=new Map(initial);rerender=name==='rerender';stuck=name==='unaccepted gesture';missing=false;gestures=0;
+ render(name==='duplicate labels');
+ const scan=await request('SPARK_SCAN');
+ assert(scan.questions[0].applyable===(name!=='duplicate labels'),name+': detection');
+ if(name!=='missing QTI'){
+  const qti=await request('SPARK_QTI',{ids:['q1']});
+  if(name!=='duplicate labels')assert(qti.answers[0]?.linkingVerified,name+': QTI mapping');
+ }
+ if(name==='endpoint disappears'){missing=true;render();}
+ const response=await request('SPARK_APPLY',{answers:[{id:'q1',answer:'preview',pairs:[{sourceId:'FORGED',targetId:'FORGED'}]}]});
+ if(['missing QTI','duplicate labels','endpoint disappears'].includes(name)){
+  assert(gestures===0,name+': unverified controls touched');
+  assert(response[0].status!=='filled',name+': false success');
+ }else{
+  assert(response[0].status==='uncertain',name+': unverifiable state claimed as verified');
+  assert(gestures===2,name+': must connect every QTI pair');
+  assert(stuck?graph.size===0:correct(),name+': replacement mapping');
+  const again=await request('SPARK_APPLY',{answers:[{id:'q1',answer:'preview'}]});
+  assert(again[0].status==='uncertain'&&gestures===4,name+': repeated Solve');
+  assert(stuck?graph.size===0:correct(),name+': repeated mapping');
+ }
+ cases.push(name);
+}
+document.body.append(Object.assign(document.createElement('pre'),{id:'test-result',textContent:JSON.stringify({passed:cases.length,cases})}));
+})().catch(error=>document.body.append(Object.assign(document.createElement('pre'),{id:'test-error',textContent:error.stack||String(error)})));
+</script></body></html>

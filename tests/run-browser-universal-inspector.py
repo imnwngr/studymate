@@ -1,4 +1,6 @@
 from pathlib import Path
+import os
+import shutil
 from playwright.sync_api import sync_playwright
 root=Path(__file__).resolve().parent.parent
 script=(root/'inspector-content.js').read_text()
@@ -14,7 +16,8 @@ html='''<!doctype html><html><body>
 def send(page,kind):
  return page.evaluate('kind=>new Promise(resolve=>window.inspectorMessage({type:kind}, {}, resolve))',kind)
 with sync_playwright() as p:
- browser=p.chromium.launch(headless=True,executable_path='/usr/bin/chromium',args=['--no-sandbox'])
+ executable=os.environ.get('SPARK_BROWSER') or shutil.which('chromium') or 'C:/Program Files/Google/Chrome/Application/chrome.exe'
+ browser=p.chromium.launch(headless=True,executable_path=executable,args=['--no-sandbox'])
  page=browser.new_page()
  page.set_content(html)
  page.evaluate(script)
@@ -35,7 +38,8 @@ with sync_playwright() as p:
  assert {'click','input','change','initial','final'}<=types,types
  dump=str(result)
  assert 'SECRET_TEST_PASSWORD' not in dump, 'Password leaked!'
- assert 'example' in dump and 'two' in dump and 'beta' in dump,'No input/output text'
+ assert 'example' not in dump, 'Typed value leaked!'
+ assert 'two' in dump and 'beta' in dump,'No choice state'
  capture=send(page,'SPARK_INSPECT_CAPTURE')['result']
  assert capture['summary']['interactionCount']==4,capture
  print('Inspector browser simulation: radio, dropdown, input and correction passed')

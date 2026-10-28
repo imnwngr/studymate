@@ -3,7 +3,7 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
-const src=fs.readFileSync(path.join(__dirname,'../content.js'),'utf8');
+const src=fs.readFileSync(path.join(__dirname,'../adapters/ngl.js'),'utf8');
 
 test('submit prefers a unique actionable Spark gradebook control, with check fallback',()=>{
   assert.match(src,/availableActionControls\('submit'\)/);

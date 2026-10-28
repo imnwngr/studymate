@@ -24,6 +24,7 @@ async function harness() {
       async get(){return {id:99,url:'https://learn.eltngl.com/dashboard/assignments/example',title:'NGL Spark'};},
       async query(){return [];},
       async sendMessage(_tab,{type},{frameId}){
+        if (type==='SPARK_INSPECT_PROBE' && frameId===0) return {ok:true,result:{instanceId:'dashboard-1',adapter:'ngl',interactionCount:0,correctionWidgets:0}};
         if (type==='SPARK_INSPECT_PROBE' && frameId===1941) return {ok:true,result:{instanceId:'editor-1',correctionWidgets:1,interactionCount:2}};
         if (type==='SPARK_INSPECT_PROBE' && frameId===1942) return {ok:true,result:{instanceId:'dropdown-1',correctionWidgets:0,interactionCount:1}};
         if (type==='SPARK_INSPECT_TRACE_START' && [1941,1942].includes(frameId)) {state.started++;return {ok:true};}
@@ -34,17 +35,11 @@ async function harness() {
         return {ok:false,error:'unavailable'};
       }
     },
-    webNavigation:{async getAllFrames(){const frames=[{frameId:0,parentFrameId:-1},{frameId:1940,parentFrameId:0}];if(state.exerciseLoaded)frames.push({frameId:1941,parentFrameId:1940});if(state.genericLoaded)frames.push({frameId:1942,parentFrameId:1940});return frames;}},
-    scripting:{async executeScript({target}){
-      if(target.allFrames){const f=[{frameId:0,result:{title:'NGL',correctionWidgets:0}},{frameId:1940,result:{title:'nullblank',correctionWidgets:0}}];
-        if(state.exerciseLoaded) f.push({frameId:1941,result:{title:'Writing skill | 1e',correctionWidgets:1,interactionCount:2,readyState:'complete'}});
-        if(state.genericLoaded)f.push({frameId:1942,result:{title:'Real life',correctionWidgets:0,interactionCount:1,interactionTypes:['is-dropdown'],readyState:'complete'}});
-        return f;
-      }
-      return [];
-    }}
+    webNavigation:{async getAllFrames(){const url='https://learn.eltngl.com/assignments/example';const frames=[{frameId:0,parentFrameId:-1,url},{frameId:1940,parentFrameId:0,url}];if(state.exerciseLoaded)frames.push({frameId:1941,parentFrameId:1940,url});if(state.genericLoaded)frames.push({frameId:1942,parentFrameId:1940,url});return frames;}},
+    permissions:{async contains(){return true;}},
+    scripting:{async executeScript({target}){assert.ok(Array.isArray(target.frameIds));return [];}}
   };
-  const context={chrome,location:{search:'?tabId=99'},URLSearchParams,URL:{createObjectURL(blob){downloaded=blob;return 'blob:test';},revokeObjectURL(){}},Blob,
+  const context={chrome,location:{search:'?tabId=99'},URLSearchParams,URL:class extends URL {static createObjectURL(blob){downloaded=blob;return 'blob:test';}static revokeObjectURL(){}},Blob,
     setTimeout(){return 1;},clearTimeout(){},setInterval(fn){poll=fn;return 123;},clearInterval(){poll=null;},
     document:{getElementById:node,createElement(tag){return node('dynamic-'+tag+'-'+dom.size);},body:{append(){}}},console};
   vm.runInNewContext(script,context,{timeout:5000});

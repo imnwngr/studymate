@@ -1,0 +1,90 @@
+<!doctype html><meta charset="utf-8"><title>Universal Inspector synthetic fixture</title>
+<button id="action" type="button">Action</button><input id="text" value="SECRET_TYPED_VALUE">
+<input type="password" value="SECRET_PASSWORD"><input type="hidden" value="SECRET_TOKEN">
+<input id="payment" autocomplete="cc-number" value="SECRET_PAYMENT">
+<textarea>SECRET_TEXTAREA</textarea><div contenteditable="true">SECRET_EDITABLE</div>
+<input id="choice" type="checkbox"><select><option>First</option><option>Second</option></select>
+<div id="shadow"></div>
+<script>
+window.handlers=[];
+window.chrome={runtime:{onMessage:{addListener(fn){handlers.push(fn);}}}};
+document.querySelector('#shadow').attachShadow({mode:'open'}).innerHTML='<button type="button">Shadow action</button>';
+const params=new URL(location).searchParams;
+if(params.has('ngl')){
+ const root=document.createElement('div');root.className='interaction om-text-gap';
+ root.innerHTML='<textarea>SECRET_NGL_TEXTAREA</textarea><input class="ngl-input" value="SECRET_NGL_OLD"><div class="om-text-gap__pool-item"><div class="om-text-gap__draggable" data-model-id="source-1">Phrase</div></div><div class="om-text-gap__target-item"><div class="om-text-gap__droppable"></div></div>';
+ document.body.append(root);
+}
+window.send=type=>new Promise(resolve=>handlers[0]({type,context:{sessionId:'fixture-session',frameId:10}},null,resolve));
+</script>
+<script src="/inspector-generic.js"></script><script src="/inspector-content.js"></script>
+<script>
+(async()=>{
+ if(params.has('child')||params.has('ngl')){window.ready=true;return;}
+ const cases=[],check=(name,ok)=>{if(!ok)throw Error(name);cases.push(name);};
+ await send('SPARK_INSPECT_TRACE_START');
+ const foreign=(win,type)=>new Promise(resolve=>win.handlers[0]({type,expectedSessionId:'foreign',context:{sessionId:'foreign'}},null,resolve));
+ await foreign(window,'SPARK_INSPECT_TRACE_START');await foreign(window,'SPARK_INSPECT_TRACE_STOP');await foreign(window,'SPARK_INSPECT_TRACE_CLEAR');
+ const owned=(await send('SPARK_INSPECT_TRACE_GET')).result;
+ check('generic duplicate Start and stale Stop/Clear preserve ownership',owned.active&&owned.context.sessionId==='fixture-session'&&owned.eventCount>0);
+ document.querySelector('#action').click();
+ document.querySelector('#choice').checked=true;
+ document.querySelector('#choice').dispatchEvent(new Event('change',{bubbles:true}));
+ document.querySelector('#text').dispatchEvent(new InputEvent('input',{bubbles:true,data:'SECRET_KEY'}));
+ document.querySelector('#shadow').shadowRoot.querySelector('button').click();
+ await new Promise(r=>setTimeout(r,10));
+ let trace=(await send('SPARK_INSPECT_TRACE_GET')).result;
+ check('generic button click captured',trace.events.some(e=>e.type==='click'));
+ check('checkbox transition is observed',trace.events.some(e=>e.type==='change'&&e.after.checked===true&&e.transitionVerified));
+ check('typed and sensitive fields redacted',!JSON.stringify(trace).includes('SECRET_'));
+ check('open shadow control identified',new Set(trace.events.filter(e=>e.type==='click').map(e=>e.target.nodeId)).size===2);
+ const replacement=document.createElement('input');replacement.type='checkbox';document.querySelector('#choice').replaceWith(replacement);
+ replacement.checked=true;replacement.dispatchEvent(new Event('change',{bubbles:true}));await new Promise(r=>setTimeout(r,10));
+ trace=(await send('SPARK_INSPECT_TRACE_GET')).result;
+ check('dynamic rerender observed',trace.events.some(e=>e.type==='dom-mutation')&&trace.events.filter(e=>e.type==='change').length===2);
+ await send('SPARK_INSPECT_TRACE_STOP');
+ trace=(await send('SPARK_INSPECT_TRACE_GET')).result;
+ check('initial and final boundaries retained',trace.events[0].type==='initial'&&trace.events.at(-1).type==='final');
+ const count=trace.eventCount;document.querySelector('#action').click();
+ check('Stop removes listeners',(await send('SPARK_INSPECT_TRACE_GET')).result.eventCount===count);
+ const duplicate=document.createElement('script');duplicate.src='/inspector-generic.js';document.body.append(duplicate);await new Promise(r=>duplicate.onload=r);
+ const listener=document.createElement('script');listener.src='/inspector-content.js';document.body.append(listener);await new Promise(r=>listener.onload=r);
+ check('reinjection installs no duplicate message listener',handlers.length===1);
+ await send('SPARK_INSPECT_TRACE_START');
+ check('restart resets buffer',(await send('SPARK_INSPECT_TRACE_GET')).result.eventCount===1);
+ for(let i=0;i<800;i++){replacement.checked=!!(i%2);replacement.dispatchEvent(new Event('change',{bubbles:true}));}
+ await send('SPARK_INSPECT_TRACE_STOP');trace=(await send('SPARK_INSPECT_TRACE_GET')).result;
+ check('event buffer bounded',trace.events.length<=600&&trace.truncated&&trace.observation.dropped>0);
+ check('budget retains final boundary',trace.events.at(-1).type==='final');
+ const children=[];
+ for(let i=0;i<2;i++){
+  const child=document.createElement('iframe');child.src='/tests/browser-universal-inspector.html?child';document.body.append(child);
+  await new Promise(r=>child.onload=r);children.push(child);
+ }
+ const captures=await Promise.all(children.map(f=>f.contentWindow.send('SPARK_INSPECT_CAPTURE')));
+ check('generic child frames retain bounded structural controls',captures.every(c=>c.result.adapter==='generic'&&c.result.controls.length<=100&&c.result.controls.some(n=>n.controlType==='checkbox')));
+ const instances=await Promise.all(children.map(f=>f.contentWindow.send('SPARK_INSPECT_PROBE')));
+ check('same URL documents have independent identities',instances[0].result.instanceId!==instances[1].result.instanceId);
+ await children[0].contentWindow.send('SPARK_INSPECT_TRACE_START');
+ const childDocument=children[0].contentDocument;childDocument.replaceChild(childDocument.createElement('html'),childDocument.documentElement);
+ const changed=(await children[0].contentWindow.send('SPARK_INSPECT_TRACE_GET')).result.observation;
+ check('document-root coverage loss is explicit',changed.observerAttached&&!changed.documentConnected&&!changed.observerActive);
+ await children[0].contentWindow.send('SPARK_INSPECT_TRACE_STOP');
+ const ngl=document.createElement('iframe');ngl.src='/tests/browser-universal-inspector.html?ngl';document.body.append(ngl);await new Promise(r=>ngl.onload=r);
+ const captured=await ngl.contentWindow.send('SPARK_INSPECT_CAPTURE');
+ check('NGL deep word-pool schema remains available',captured.result.deepSchema===1&&captured.result.wordPools.length===1);
+ check('NGL capture redacts editable descendants',!JSON.stringify(captured).includes('SECRET_'));
+ await ngl.contentWindow.send('SPARK_INSPECT_TRACE_START');
+ await foreign(ngl.contentWindow,'SPARK_INSPECT_TRACE_START');await foreign(ngl.contentWindow,'SPARK_INSPECT_TRACE_STOP');await foreign(ngl.contentWindow,'SPARK_INSPECT_TRACE_CLEAR');
+ const nglOwned=(await ngl.contentWindow.send('SPARK_INSPECT_TRACE_GET')).result;
+ check('NGL duplicate Start and stale Stop/Clear preserve ownership',nglOwned.active&&nglOwned.context.sessionId==='fixture-session'&&nglOwned.eventCount>0);
+ const editor=ngl.contentDocument.querySelector('.ngl-input');editor.setAttribute('value','SECRET_NGL_NEW');editor.dispatchEvent(new Event('input',{bubbles:true}));
+ await new Promise(r=>setTimeout(r,10));await ngl.contentWindow.send('SPARK_INSPECT_TRACE_STOP');
+ const nglTrace=await ngl.contentWindow.send('SPARK_INSPECT_TRACE_GET');
+ const leaks=[];
+ function findLeaks(value,path='trace'){if(typeof value==='string'&&value.includes('SECRET_'))leaks.push(path);else if(value&&typeof value==='object')for(const [k,v] of Object.entries(value))findLeaks(v,path+'.'+k);}
+ findLeaks(nglTrace);
+ check('NGL mutation old values and typed state redacted: '+leaks.join(', '),leaks.length===0);
+ const out=document.createElement('pre');out.id='test-result';out.textContent=JSON.stringify({passed:cases.length,cases});document.body.append(out);
+})().catch(error=>{const p=document.createElement('pre');p.id='test-error';p.textContent=error.stack;document.body.append(p);});
+</script>

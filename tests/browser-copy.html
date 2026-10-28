@@ -12,7 +12,7 @@
   <div class="layout__content"><div class="contentblock"><p>HIDDEN <input type="text" value="hidden-student-input"></p></div></div>
 </div>
 <script>window.chrome={runtime:{onMessage:{addListener(fn){window.__messageHandler=fn;}}}};</script>
-<script src="../qti.js"></script><script src="../content.js"></script>
+<script src="../qti.js"></script><script src="../core/site-registry.js"></script><script src="../solvers/interactions.js"></script><script src="../solvers/sequence.js"></script><script src="../solvers/text-correction.js"></script><script src="../answer-sources/embedded-qti.js"></script><script src="../core/runtime.js"></script><script src="../adapters/ngl.js"></script><script src="../adapters/generic.js"></script><script src="../content.js"></script>
 <script>
 (async()=>{
   const run=msg=>new Promise(resolve=>window.__messageHandler(msg,null,resolve));

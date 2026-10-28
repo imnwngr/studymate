@@ -54,7 +54,7 @@ Current <inlineChoiceInteraction responseIdentifier="R4"><inlineChoice identifie
 window.fetch=async()=>({ok:true,headers:{get(){return String(xml.length);}},text:async()=>JSON.stringify({'cat2653964.xml':xml})});
 const marker=document.createElement('script');marker.type='text/plain';marker.src='/cdn_proxy/fixture/data.js';document.head.append(marker);
 </script>
-<script src="../content.js"></script>
+<script src="../core/site-registry.js"></script><script src="../solvers/interactions.js"></script><script src="../solvers/sequence.js"></script><script src="../solvers/text-correction.js"></script><script src="../answer-sources/embedded-qti.js"></script><script src="../core/runtime.js"></script><script src="../adapters/ngl.js"></script><script src="../adapters/generic.js"></script><script src="../content.js"></script>
 <script>
 (async()=>{
   const send=message=>new Promise(resolve=>window.__listener(message,null,resolve));

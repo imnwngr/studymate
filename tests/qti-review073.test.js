@@ -74,7 +74,7 @@ test('review: strict label-by-ID matching when DOM labels can be verified',()=>{
   assert.equal(Q.mapAssessment(item,[q]).answers.length,0);
 });
 test('review title with Writing skill remains deferred in extension',()=>{
-  const fs=require('node:fs'); const src=fs.readFileSync(require('node:path').join(__dirname,'../content.js'),'utf8');
+  const fs=require('node:fs'); const src=fs.readFileSync(require('node:path').join(__dirname,'../adapters/ngl.js'),'utf8');
   assert.match(src,/speaking\|writing\(\?: skill\)/);
 });
 test('order result exposes ordered tokens for experimental fill',()=>{

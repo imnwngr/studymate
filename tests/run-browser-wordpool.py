@@ -5,11 +5,15 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 ROOT=Path(__file__).resolve().parents[1]
 HTML=(ROOT/'tests/browser-wordpool.html').read_text()
-CONTENT=(ROOT/'content.js').read_text()
+CONTENT=(ROOT/'adapters/ngl.js').read_text()
 assert 'if(url.origin!==location.origin ||' in CONTENT
 CONTENT=CONTENT.replace('if(url.origin!==location.origin ||','if(false && url.origin!==location.origin ||',1)
 HTML=HTML.replace('<script src="../qti.js"></script>','<script>\n'+(ROOT/'qti.js').read_text()+'\n</script>')
-HTML=HTML.replace('<script src="../content.js"></script>','<script>\n'+CONTENT+'\n</script>')
+HTML=HTML.replace('<script src="../adapters/ngl.js"></script>','<script>\n'+CONTENT+'\n</script>')
+for module in ['core/site-registry.js', 'solvers/interactions.js', 'solvers/sequence.js',
+               'solvers/text-correction.js', 'answer-sources/embedded-qti.js', 'core/runtime.js',
+               'adapters/generic.js', 'content.js']:
+ HTML=HTML.replace('<script src="../'+module+'"></script>','<script>\n'+(ROOT/module).read_text()+'\n</script>')
 HTML=HTML.replace("marker.src='/cdn_proxy/test/data.js'","marker.src='file:///cdn_proxy/test/data.js'")
 with sync_playwright() as pw:
  browser=pw.chromium.launch(executable_path='/usr/bin/chromium',headless=True,args=['--no-sandbox','--disable-dev-shm-usage'])

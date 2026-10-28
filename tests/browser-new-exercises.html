@@ -1,0 +1,134 @@
+<!doctype html><html><head><meta charset="utf-8"></head><body>
+<h1 class="learningObject__title">1e | Writing | 1</h1>
+<div id="content_wrap_0" class="content-wrap"><div class="layout__rubric">Select all the necessary fields.</div>
+  <div class="layout__content"></div></div>
+<script>window.chrome={runtime:{onMessage:{addListener(listener){window.sparkSend=(message)=>new Promise(resolve=>listener(message,null,resolve));}}}};</script>
+<script src="/cdn_proxy/synthetic/data.js"></script>
+<script src="/qti.js"></script><script src="/core/site-registry.js"></script><script src="/solvers/interactions.js"></script><script src="/solvers/sequence.js"></script><script src="/solvers/text-correction.js"></script><script src="/answer-sources/embedded-qti.js"></script><script src="/core/runtime.js"></script><script src="/adapters/ngl.js"></script><script src="/adapters/generic.js"></script><script src="/content.js"></script>
+<script>
+(async()=>{
+  const assert=(condition,description)=>{if(!condition)throw Error(description);};
+  const container=document.querySelector('.layout__content');
+  const title=document.querySelector('h1');
+  const verified=['C0_0','C0_2'];
+  const cases=[];
+  let clicks=0,mode='';
+  const renderCheckbox=(initial=[],ids=[2,0,1])=>{
+    const widget=document.createElement('section');widget.className='interaction is-checkbox';
+    for(const i of ids){
+      const node=document.createElement('div');node.id=`input-checkbox-s0-c0-${i}`;
+      node.className='input-checkbox'+(initial.includes(`C0_${i}`)?' input-checkbox-checked':'');
+      node.setAttribute('role','checkbox');node.setAttribute('aria-checked',String(initial.includes(`C0_${i}`)));
+      node.setAttribute('data-model-id',String(600+i));
+      const icon=document.createElement('span');icon.className='is-checkbox__icon';icon.textContent='.';
+      const label=document.createElement('span');label.className='is-checkbox-choice-text';label.textContent=['Alpha','Beta','Gamma'][i];
+      node.append(icon,label);widget.append(node);
+    }
+    container.replaceChildren(widget);
+  };
+  container.addEventListener('click',event=>{
+    const checkbox=event.target.closest('[role="checkbox"]');
+    if(!checkbox||mode==='noTransition'||(mode==='iconOnly'&&!event.target.closest('.is-checkbox__icon')))return;
+    clicks++;
+    const next=checkbox.getAttribute('aria-checked')!=='true';
+    checkbox.setAttribute('aria-checked',String(next));
+    checkbox.classList.toggle('input-checkbox-checked',next);
+    if(mode==='rerender'&&clicks===1){
+      const widget=container.querySelector('.interaction.is-checkbox');
+      widget.replaceWith(widget.cloneNode(true));
+    }
+  });
+  const request=async (type,params={})=>{
+    const response=await sparkSend({type,...params});
+    assert(response.ok,`Message ${type} failed: ${response.error}`);
+    return response.result;
+  };
+  const runCheckbox=async(name,{initial=[],ids=[2,0,1],missing=false,broken=false,rerender=false,stuck=false,iconOnly=false}={})=>{
+    title.textContent='1e | Writing | 1';mode=rerender?'rerender':stuck?'noTransition':iconOnly?'iconOnly':'';clicks=0;
+    renderCheckbox(initial,ids);
+    if(broken)container.querySelector('[role="checkbox"]').id='unmapped';
+    const scan=await request('SPARK_SCAN');
+    const dataScript=document.querySelector('script[src$="/data.js"]');
+    if(missing)dataScript.remove();
+    const qti=await request('SPARK_QTI',{ids:['q1']});
+    if(missing)document.head.append(dataScript);
+    let result=[];
+    if(qti.answers.length)result=await request('SPARK_APPLY',{answers:[qti.answers[0]]});
+    else if(missing)result=await request('SPARK_APPLY',{answers:[{id:'q1',answer:'Alpha | Gamma',selectedIds:verified}]});
+    const actual=[...container.querySelectorAll('[role="checkbox"][aria-checked="true"]')]
+      .map(n=>n.id.replace('input-checkbox-s0-c0-','C0_')).sort();
+    if(broken||missing){
+      assert(!scan.questions[0].applyable||!qti.answers.length,`${name}: unverified key accepted`);
+      assert(!result.some(entry=>entry.status==='filled'),`${name}: applied without trusted key`);
+    }else if(stuck){
+      assert(result[0]?.status==='uncertain',`${name}: click falsely verified`);
+    }else{
+      assert(scan.questions.length===1&&scan.questions[0].kind==='checkbox',`${name}: scanner failed`);
+      assert(qti.answers.length===1 && qti.answers[0].source==='qti',`${name}: QTI key missing`);
+      assert(result[0]?.status==='filled',`${name}: ${JSON.stringify(result)}`);
+      assert(actual.join(',')===verified.join(','),`${name}: checked set wrong ${actual}`);
+      assert(clicks===initial.filter(id=>!verified.includes(id)).length+verified.filter(id=>!initial.includes(id)).length,
+        `${name}: correct entries were needlessly clicked`);
+    }
+    cases.push(name);
+  };
+  await runCheckbox('checkbox empty');
+  await runCheckbox('checkbox prechecked correct',{initial:['C0_0']});
+  await runCheckbox('checkbox wrong prechecked',{initial:['C0_1']});
+  await runCheckbox('checkbox already correct',{initial:verified});
+  await runCheckbox('checkbox reordered',{ids:[1,2,0]});
+  await runCheckbox('checkbox missing QTI',{missing:true});
+  await runCheckbox('checkbox ambiguous DOM IDs',{broken:true});
+  await runCheckbox('checkbox rerender',{rerender:true});
+  await runCheckbox('checkbox unconfirmed transition',{stuck:true});
+  await runCheckbox('checkbox icon click matches manual gesture',{iconOnly:true});
+  const renderLinking=(scenario)=>{
+    title.textContent='1e | Writing skill | 1';
+    const widget=document.createElement('section');widget.className='interaction is-linking-lines';
+    const view=document.createElement('div');view.className='ll_view columns drag';
+    const labels=scenario==='duplicate labels'?['same','same','third','fourth','fifth']:['one','two','three','four','five'];
+    for(const side of ['right','left']){
+      const count=scenario==='missing endpoint'&&side==='left'?4:5;
+      for(let i=0;i<count;i++){
+        const handle=document.createElement('div');
+        handle.className=`isLinkingMultipleLines__handle ${side}_handle`;
+        const linked=['partial correct','full correct','incorrect','swapped','css only'].includes(scenario) &&
+          (scenario==='full correct'||(scenario==='swapped'&&i<2)||(scenario==='css only'&&i===1)||i===0);
+        if(linked)handle.classList.add('linked');
+        handle.textContent=labels[i];view.append(handle);
+      }
+    }
+    widget.append(view);container.replaceChildren(widget);
+  };
+  for(const scenario of ['empty','partial correct','full correct','incorrect','swapped',
+    'missing endpoint','duplicate labels','rerender','css only','ambiguous gesture']){
+    renderLinking(scenario);
+    const scan=await request('SPARK_SCAN');
+    const q=scan.questions[0];
+    assert(q.kind==='linkingLines'&&q.applyable===false,`${scenario}: linking marked applyable`);
+    assert(q.linkingDiagnostics.pairIdentityVerified===false,`${scenario}: link identity fabricated`);
+    assert(q.linkingDiagnostics.stateVerification==='unavailable',scenario+': CSS counted as verification');
+    assert(q.linkingDiagnostics.missingEvidence.includes('qti-endpoint-dom-mapping'),scenario+': missing pair diagnostic');
+    let mutations=0;
+    const observer=new MutationObserver(records=>mutations+=records.length);
+    observer.observe(container,{subtree:true,childList:true,attributes:true,characterData:true});
+    const before=container.innerHTML;
+    if(scenario==='missing endpoint')assert(q.linkingDiagnostics.leftHandles===4,'Missing endpoint not detected');
+    if(scenario==='rerender')renderLinking(scenario);
+    const qti=await request('SPARK_QTI',{ids:['q1']});
+    assert(qti.answers.length===1&&qti.answers[0].pairs?.[0]?.sourceId==='S0'&&
+      qti.answers[0].pairs[0].targetId==='T0',`${scenario}: synthetic directed-pair mapping missing`);
+    const applied=await request('SPARK_APPLY',{answers:[{id:'q1',answer:qti.answers[0]?.answer||'unverified',
+      pairs:qti.answers[0]?.pairs||[]}]});
+    assert(applied[0]?.status==='manual',`${scenario}: linking was applied`);
+    const repeated=await request('SPARK_APPLY',{answers:[{id:'q1',answer:'unverified',pairs:[]}]});
+    assert(repeated[0]?.status==='manual',scenario+': repeated Solve bypassed safeguard');
+    await Promise.resolve();
+    mutations+=observer.takeRecords().length;observer.disconnect();
+    if(scenario!=='rerender')assert(mutations===0&&container.innerHTML===before,scenario+': manual Solve mutated DOM');
+    assert(container.querySelectorAll('.isLinkingMultipleLines__handle').length>=9,`${scenario}: linking mutated`);
+    cases.push('linking '+scenario);
+  }
+  document.body.append(Object.assign(document.createElement('pre'),{id:'test-result',textContent:JSON.stringify({passed:cases.length,cases})}));
+})().catch(error=>document.body.append(Object.assign(document.createElement('pre'),{id:'test-error',textContent:error.stack||String(error)})));
+</script></body></html>
