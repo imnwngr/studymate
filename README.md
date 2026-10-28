@@ -1,143 +1,147 @@
+<p align="center"><img src="docs/images/hero.svg" alt="studymate product illustration: a dark violet extension panel with a separate read-only Inspector" width="100%"></p>
 <h1 align="center">studymate</h1>
 <p align="center"><strong>Review the exercise. Apply with evidence.</strong></p>
-<p align="center">A Chrome extension for supported NGL / Spark and compatible QTI exercises.</p>
 <p align="center">
   <img src="https://img.shields.io/badge/version-0.8.0-555555?style=flat-square" alt="Version 0.8.0">
-  <img src="https://img.shields.io/badge/browser-Chrome-555555?style=flat-square" alt="Browser: Chrome">
-  <img src="https://img.shields.io/badge/extension-Manifest_V3-555555?style=flat-square" alt="Extension: Manifest V3">
+  <img src="https://img.shields.io/badge/browser-Chrome-555555?style=flat-square" alt="Chrome">
+  <img src="https://img.shields.io/badge/extension-Manifest_V3-555555?style=flat-square" alt="Manifest V3">
 </p>
 <p align="center"><strong>English</strong> · <a href="README.vi.md">Tiếng Việt</a></p>
-<p align="center">
-  <a href="#quick-start">Quick start</a> · <a href="#features">Features</a> ·
-  <a href="#inspector">Inspector</a> · <a href="#privacy">Privacy</a> ·
-  <a href="#development">Development</a> · <a href="#limitations">Limitations</a>
-</p>
+<p align="center"><a href="#interface">Interface</a> · <a href="#workflow">Workflow</a> · <a href="#styles">Styles</a> · <a href="#inspector">Inspector</a> · <a href="#quick-start">Install</a> · <a href="#privacy">Privacy</a> · <a href="#development">Development</a></p>
 
 ---
 
-studymate reads supported exercises, obtains available answer mappings, and applies eligible results through the website's controls. Review the detected exercise and the actual page state before submitting.
+A Chrome extension for supported **NGL / Spark** and compatible **QTI** exercises. Scan the page, review the available mapping, and apply eligible results through the website's controls. A separate Inspector helps collect evidence when an interaction needs investigation.
 
 > [!IMPORTANT]
-> Compatibility depends on the exercise structure and browser permissions. Synthetic tests do not prove authenticated website success or saved grades. Checkbox and Linking Lines have specific limitations described below. Version 0.8.0 is the source version, not a claim of a Chrome Web Store listing or GitHub Release.
+> Support depends on exercise structure and permissions. Checkbox and Linking Lines have limitations below. Local screenshots and synthetic tests do not establish authenticated website success or saved grades.
+
+<a id="interface"></a>
+## The interface
+
+<table>
+<tr><th width="34%">Main popup</th><th width="66%">Settings</th></tr>
+<tr><td valign="top"><a href="docs/images/popup.webp"><picture><source media="(prefers-color-scheme: light)" srcset="docs/images/popup-light.webp"><img src="docs/images/popup.webp" alt="Actual popup UI in a safe local fixture, showing an empty exercise and scan in progress" width="100%"></picture></a></td><td valign="top"><a href="docs/images/settings.webp"><img src="docs/images/settings.webp" alt="Actual Settings UI: appearance controls and four distinct visual style selectors in a local fixture" width="100%"></a><p>Language, appearance, provider configuration and navigation preferences in one place.</p></td></tr>
+</table>
+
+*Screenshots show the actual repository UI rendered by Chrome with mocked extension APIs and no learner data. Popup previews show an empty/scanning state. They are not authenticated-site or installed-extension screenshots. Click to enlarge.*
+
+<a id="workflow"></a>
+## From scan to verified state
+
+<picture><source media="(max-width: 640px)" srcset="docs/images/workflow-mobile.svg"><img src="docs/images/workflow.svg" alt="Scan, detect exercise, resolve mapping, apply, verify; Inspector independently observes and exports JSON without applying answers" width="100%"></picture>
+
+Unverified or unsupported transitions stop for review. Word Pool uses **Reset → Verify every gap empty → Fill → Verify mapping**, including already-filled editable exercises. Partial changes can remain after a failed transition. Verification means observed UI state, not guaranteed grading.
+
+<a id="features"></a>
+## What it supports
+
+| Capability | NGL / Spark | Generic adapter |
+| --- | --- | --- |
+| Discovery | Accessible frames and supported platform widgets | Native controls in explicit exercise groups |
+| Answer source | Supported QTI; optional configured fallback | Compatible embedded QTI with unique response IDs |
+| Apply | Text, dropdown, radio, multiple-choice, sequence, text correction | Native text, select, radio, checkbox; refuses ambiguous mappings |
+| Word Pool | Reset and refill through supported site controls | Custom word-pool protocol unsupported |
+| Checkbox | QTI IDs and final selected-set checks; popup can block some multi-answer results | Native checked-state application with compatible mapping |
+| Linking Lines | Endpoint mapping and gestures; exact final graph unverified | Custom linking widgets unsupported |
+| Submission | Explicit submission and gated NGL within-activity progression | No submission or automatic navigation |
+
+QTI XML / JSON-wrapped XML is parsed with bounds, without executing scripts. Page-provided declarations do not independently prove publisher authenticity. NGL can use optional OpenAI-compatible providers or limited offline rules; Generic suggestions cannot authorize Apply without its required local mapping.
+
+<a id="styles"></a>
+## Four styles, four compositions
+
+<table>
+<tr><th width="50%">Ventrix</th><th width="50%">Chainsaw Editorial</th></tr>
+<tr><td align="center"><a href="docs/images/popup.webp"><img src="docs/images/popup.webp" alt="Ventrix: centered headline, rounded command button and violet atmosphere; actual local UI screenshot" width="320"></a></td><td align="center"><a href="docs/images/style-editorial.webp"><img src="docs/images/style-editorial.webp" alt="Chainsaw Editorial: serif headline, asymmetric red rule and squared action; actual local UI screenshot" width="320"></a></td></tr>
+<tr><th>Cognify</th><th>InsightOS</th></tr>
+<tr><td align="center"><a href="docs/images/style-cognify.webp"><img src="docs/images/style-cognify.webp" alt="Cognify: compact cyan instrumentation, framed heading and segmented steps; actual local UI screenshot" width="320"></a></td><td align="center"><a href="docs/images/style-insightos.webp"><img src="docs/images/style-insightos.webp" alt="InsightOS: rounded dark modules, lime command button and grouped progress; actual local UI screenshot" width="320"></a></td></tr>
+</table>
+
+Select a style in **Settings**; it saves automatically. Light, dark and system themes are available. Interface languages: English, Vietnamese, Simplified Chinese and Traditional Chinese. Appearance does not change solver capabilities.
+
+<a id="inspector"></a>
+## Observe with Inspector
+
+<details>
+<summary><strong>Open the Inspector interface preview</strong></summary>
+
+<a href="docs/images/inspector.webp"><img src="docs/images/inspector.webp" alt="Actual Inspector UI in a local fixture: capture, JSON export, recording controls and zero captured events; example.invalid is a dummy source" width="100%"></a>
+
+*Local UI screenshot, not a live recording. The source is the reserved dummy domain example.invalid. No answers, credentials or session identifiers are shown.*
+
+</details>
+
+1. Open Inspector from the intended source tab and check frame coverage.
+2. Capture a snapshot or record a manual interaction; stop and review coverage/truncation warnings.
+3. Export JSON. Choose `inspector-data/exports` when the directory picker is available; otherwise use Save As/download settings and copy it there.
+
+Inspector is read-only: it does not solve, submit or establish correctness. Recording is bounded, stops after three minutes, and ends on top-level navigation. Cross-origin frames and directory access may need permission again.
+
+Optional local analysis: `node .\tools\analyze-inspector.cjs`. Generated reports/prompts are proposals for a separately authorized development step. [Workflow guide](inspector-data/README.md) · [Universal Inspector](docs/UNIVERSAL_INSPECTOR.md) · [Deep evidence](docs/inspector-deep.md)
+
+---
 
 <a id="quick-start"></a>
-## Quick start
+## Install and use
 
-**You need Chrome and a copy of this repository.** Git is optional if you download the source ZIP. The extension runtime needs no build step, Node.js or dependency installation.
+**Chrome + the source folder. No runtime build or dependency installation.** Download the source ZIP or clone:
 
 ```powershell
 git clone https://github.com/imnwngr/studymate.git
 Set-Location studymate
 ```
 
-1. Open `chrome://extensions` and enable **Developer mode**.
-2. Choose **Load unpacked** and select the `studymate` folder containing `manifest.json`.
-3. Open a supported exercise and wait for it to load.
-4. Open studymate, choose **Scan**, and review the detected exercise/frame.
-5. Choose **Solve**. Eligible answers are applied; inspect uncertain or skipped results on the actual page.
+1. Open `chrome://extensions`, enable **Developer mode**, select **Load unpacked**, and choose the folder containing `manifest.json`.
+2. Open an exercise, launch studymate, choose **Scan**, review the detected frame, then **Solve**.
+3. Inspect actual results. Let Word Pool finish resetting and filling before interacting again.
+4. Use **Done & next** only when enabled and when you intend to submit. NGL can advance within an activity after verification gates pass; a changed button does not prove saved grades.
 
-**Updating:** pull the latest source, reload the extension in Chrome, then refresh exercise tabs. If your unpacked extension used a folder that has since been renamed, remove that unpacked entry and load the new folder; review permissions and settings afterward.
-
-**Submission:** use **Done & next** only when enabled and when you intend to submit. NGL can advance within an activity after its verification gates pass. Generic has no submission or automatic navigation. A changed button does not prove a saved grade.
-
----
-
-<a id="features"></a>
-## Supported workflows
-
-| Capability | NGL / Spark | Generic adapter |
-| --- | --- | --- |
-| Discovery | Accessible exercise frames and supported platform widgets | Native controls in explicit exercise groups |
-| Answer source | Supported QTI mappings; optional configured fallback | Compatible embedded QTI with unique response identities |
-| Apply | Text, dropdown, radio, multiple-choice, sequence and text correction, subject to widget checks | Native text, select, radio and checkbox; refuses ambiguous or unsupported controls |
-| Word Pool | Reset all occupied gaps, verify empty, then refill from QTI | No platform-specific word-pool protocol |
-| Checkbox | QTI IDs and selected-set verification; popup can block some multi-answer results | Native checked-state application with a compatible mapping |
-| Linking Lines | QTI endpoint mapping and connection gestures; final graph remains unverified | Custom linking widgets unsupported |
-| Submission / navigation | Explicit submission and gated within-activity progression | Unsupported |
-
-QTI XML or JSON-wrapped XML is parsed with bounds, without executing embedded scripts. Page-provided declarations are not independent proof of publisher authenticity or grading correctness.
-
-Word Pool follows **Reset → Verify empty → Fill → Verify mapping**, including already-filled editable exercises. It stops on an unverified transition; successful partial changes may remain. Let the sequence finish before interacting again.
-
-### Optional AI and offline fallback
-
-NGL workflows can use configured OpenAI-compatible providers or limited offline rules. API calls send question/choice data to the selected provider and can incur charges. Offline mode avoids those provider calls. Generic AI/manual suggestions cannot authorize Apply without the required local mapping.
-
-### Four visual styles
-
-| Style | Presentation |
-| --- | --- |
-| Ventrix | Centered type and a violet horizon |
-| Chainsaw Editorial | Serif headlines with black and red framing |
-| Cognify | Precise controls with cyan accents |
-| InsightOS | Dark modules with lime accents |
-
-Choose a style in **Settings**; it saves automatically. Light, dark and system themes are available, with English, Vietnamese, Simplified Chinese and Traditional Chinese interface languages. Changing appearance does not change solving capabilities.
-
-<a id="inspector"></a>
-## Inspector
-
-Inspector observes; it does not solve, submit, simulate actions or establish correctness.
-
-1. Open Inspector from the intended source tab and check frame coverage.
-2. Capture a snapshot or start recording, then perform the interaction manually.
-3. Stop recording and check coverage, missing-boundary and truncation warnings.
-4. Export JSON and review it before sharing.
-
-Recordings are bounded and automatically stop after three minutes. Top-level navigation stops the session; child-frame document generations are tracked separately. NGL deep capture and Generic structural capture retain different evidence.
-
-Choose `inspector-data/exports` when the directory picker is supported. Chrome may request permission again. Otherwise use Save As or browser download settings, then copy the export into that directory. The extension cannot write to its source folder without user permission.
-
-Optional local analysis needs Node.js and built-in modules only:
-
-```powershell
-# Run from the repository root.
-node .\tools\analyze-inspector.cjs
-```
-
-Reports and prompts are proposals for a separately authorized development step, not automatic adapter modifications. See [Inspector workflow](inspector-data/README.md), [Universal Inspector](docs/UNIVERSAL_INSPECTOR.md) and [deep evidence](docs/inspector-deep.md).
-
----
+**Updating:** pull source, reload the extension, then refresh exercise tabs. If its directory was renamed, load the new location and review permissions/settings. Version 0.8.0 does not imply a Chrome Web Store listing or GitHub Release.
 
 <a id="privacy"></a>
-## Privacy and permissions
+## Privacy, permissions and limits
 
-| Permission / data | Purpose and boundary |
+| Access | Purpose |
 | --- | --- |
-| `activeTab`, `scripting` | User-invoked access and script injection into permitted frames |
-| `webNavigation` | Discover the tab's frame hierarchy |
-| `storage` | Store local preferences and provider configuration |
+| `activeTab`, `scripting`, `webNavigation` | User-invoked access, permitted script injection and frame discovery |
+| `storage` | Local settings and provider configuration, not a hardened secret vault |
 | Declared host access | NGL, Avallain frames and the OpenAI API origin |
-| Optional HTTPS / localhost | Authorized provider endpoints and frame access; declaration does not grant access automatically |
+| Optional HTTPS / localhost | Explicitly authorized endpoints or frames; declaration alone grants nothing |
 
-Cross-origin frames can need separate grants. Restricted browser pages and closed Shadow DOM are inaccessible. Keys/settings use Chrome local storage, which is not a hardened secret vault.
+API calls send question/choice data to the configured provider and may incur charges; offline mode avoids provider calls. Inspector does not intentionally read cookies, authentication stores or application models. Editable values are redacted, but NGL text, selected answers, DOM IDs, titles and URL paths can remain. Some Solve failure diagnostics can contain answer text. **Review exports/logs before sharing.**
 
-Inspector does not intentionally read cookies, authentication stores or application models. Editable values are redacted, but NGL text, selected answers, DOM identifiers, titles and URL paths can remain. Some Solve failure diagnostics can contain answer text. **Review exports and logs before sharing; avoid sensitive pages.**
+<details>
+<summary><strong>Known limitations and local-data boundaries</strong></summary>
 
-Recordings, reports, prompts, browser profiles, credentials and local artifacts stay outside Git through ignore rules. These rules do not define a safe ZIP package. Export schema markers, filenames, storage keys and `SPARK_*` message contracts retain compatibility names; NGL / Spark remains the external platform's name.
+- Checkbox popup validation can reject some multi-answer results before Apply.
+- Linking Lines cannot verify exact final connections; review them manually.
+- Multiple exercise frames can be ambiguous. Generic refuses unsupported/custom widgets, missing mappings and stale DOM.
+- Restricted browser pages and closed Shadow DOM are inaccessible.
+- Word Pool return behavior and application persistence need authenticated retesting for the specific exercise. Synthetic success is not live-site proof.
+- Keep recordings, reports, prompts, browser profiles, credentials and private artifacts out of Git/archives. Ignore rules are not a safe ZIP policy.
+- Legacy export schema names, storage keys and `SPARK_*` contracts remain for compatibility; NGL / Spark names the external platform.
 
-<a id="structure"></a>
-## Project structure
+</details>
+
+<a id="development"></a>
+## Development
+
+<details>
+<summary><strong>Project structure and test commands</strong></summary>
 
 ```text
 studymate/
-├── manifest.json             Extension metadata and permissions
-├── popup.* / options.*       Exercise workflow and Settings
-├── core/                    Site registry, frames and runtime
-├── adapters/                NGL and Generic discovery/application
-├── answer-sources/          Embedded QTI integration
-├── solvers/                 Shared interaction solvers
-├── inspector*.js            Read-only capture and export
-├── tools/                   Optional local analysis
-├── tests/                   Node tests and synthetic browser fixtures
-├── docs/                    Architecture and workflow notes
-└── inspector-data/          Local private data; README/placeholders tracked
+├── core/ · adapters/        Frame/runtime coordination and site adapters
+├── answer-sources/         Embedded QTI integration
+├── solvers/                Shared interaction solvers
+├── popup.* · options.*     Workflow and Settings
+├── inspector*.js           Read-only capture/export
+├── tests/ · tools/         Local verification and analysis
+└── docs/ · inspector-data/ Documentation and private local evidence
 ```
 
-<a id="development"></a>
-## Development and testing
-
-Node tests need no npm packages. Chrome fixtures need an installed Chrome/Chromium browser; supported runners accept `SPARK_BROWSER`. Optional Python runners need Python and Playwright.
+Node tests need no npm packages. Browser fixtures need installed Chrome/Chromium; supported runners accept `SPARK_BROWSER`. Optional Python runners need Python and Playwright.
 
 ```powershell
 node --test --test-isolation=none tests/*.test.js tests/*.test.cjs
@@ -147,20 +151,12 @@ node tests/run-browser-inspector-universal.cjs
 node tests/run-browser-linking.cjs
 ```
 
-Private-evidence tests may skip without local fixtures; some development checks still reference ignored audit files. Preserve unrelated changes and distinguish synthetic verification from authenticated testing. Read the [multisite architecture](docs/MULTISITE_ARCHITECTURE.md) before changing runtime contracts.
+Private-evidence tests may skip without fixtures; some checks reference ignored audit files. See [architecture](docs/MULTISITE_ARCHITECTURE.md) and [visual asset provenance](docs/images/README.md). Preserve unrelated work; distinguish synthetic tests from authenticated checks.
 
-<a id="limitations"></a>
-## Known limitations
-
-- Checkbox popup validation can reject some multi-answer results before Apply.
-- Linking Lines sends gestures but cannot verify exact final connection identities; review manually.
-- Multiple exercise frames can be ambiguous; check the selected exercise.
-- Generic requires a compatible embedded mapping; custom widgets and stale DOM can be refused.
-- Word Pool return behavior and application persistence still need authenticated retesting for the specific exercise.
-- Synthetic success does not establish live-site compatibility or saved grades.
+</details>
 
 ---
 
-[Repository](https://github.com/imnwngr/studymate) · [Changelog](CHANGELOG.md) · [Vietnamese guide](README.vi.md)
+[Repository](https://github.com/imnwngr/studymate) · [Changelog](CHANGELOG.md) · [Tiếng Việt](README.vi.md)
 
-No standalone license file is included. Renaming does not grant new redistribution rights.
+No standalone license file is included. This documentation grants no new redistribution rights.

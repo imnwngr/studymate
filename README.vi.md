@@ -1,143 +1,147 @@
+<p align="center"><img src="docs/images/hero.svg" alt="Minh họa sản phẩm studymate: bảng tiện ích tím đậm với Inspector chỉ đọc riêng biệt" width="100%"></p>
 <h1 align="center">studymate</h1>
 <p align="center"><strong>Xem bài. Áp dụng dựa trên bằng chứng.</strong></p>
-<p align="center">Tiện ích Chrome cho NGL / Spark và bài tập QTI tương thích.</p>
 <p align="center">
   <img src="https://img.shields.io/badge/version-0.8.0-555555?style=flat-square" alt="Phiên bản 0.8.0">
-  <img src="https://img.shields.io/badge/browser-Chrome-555555?style=flat-square" alt="Trình duyệt: Chrome">
-  <img src="https://img.shields.io/badge/extension-Manifest_V3-555555?style=flat-square" alt="Tiện ích: Manifest V3">
+  <img src="https://img.shields.io/badge/browser-Chrome-555555?style=flat-square" alt="Chrome">
+  <img src="https://img.shields.io/badge/extension-Manifest_V3-555555?style=flat-square" alt="Manifest V3">
 </p>
 <p align="center"><a href="README.md">English</a> · <strong>Tiếng Việt</strong></p>
-<p align="center">
-  <a href="#quick-start">Bắt đầu</a> · <a href="#features">Tính năng</a> ·
-  <a href="#inspector">Inspector</a> · <a href="#privacy">Riêng tư</a> ·
-  <a href="#development">Phát triển</a> · <a href="#limitations">Giới hạn</a>
-</p>
+<p align="center"><a href="#interface">Giao diện</a> · <a href="#workflow">Quy trình</a> · <a href="#styles">Phong cách</a> · <a href="#inspector">Inspector</a> · <a href="#quick-start">Cài đặt</a> · <a href="#privacy">Riêng tư</a> · <a href="#development">Phát triển</a></p>
 
 ---
 
-studymate đọc bài được hỗ trợ, lấy ánh xạ đáp án hiện có và áp dụng kết quả đủ điều kiện bằng điều khiển của website. Kiểm tra bài đã nhận diện và trạng thái trang thực tế trước khi nộp.
+Tiện ích Chrome cho **NGL / Spark** và bài **QTI** tương thích. Quét trang, xem ánh xạ hiện có và áp dụng kết quả đủ điều kiện bằng điều khiển của website. Inspector riêng giúp thu thập bằng chứng khi cần điều tra tương tác.
 
 > [!IMPORTANT]
-> Khả năng tương thích phụ thuộc cấu trúc bài và quyền trình duyệt. Test mô phỏng không chứng minh thành công trên website có đăng nhập hoặc điểm đã lưu. Checkbox và Linking Lines có giới hạn bên dưới. Version 0.8.0 là phiên bản source, không khẳng định có Chrome Web Store hoặc GitHub Release.
+> Hỗ trợ phụ thuộc cấu trúc bài và quyền truy cập. Checkbox và Linking Lines có giới hạn bên dưới. Ảnh local và test mô phỏng không chứng minh thành công trên website có đăng nhập hoặc điểm đã lưu.
+
+<a id="interface"></a>
+## Giao diện
+
+<table>
+<tr><th width="34%">Popup chính</th><th width="66%">Cài đặt</th></tr>
+<tr><td valign="top"><a href="docs/images/popup.webp"><picture><source media="(prefers-color-scheme: light)" srcset="docs/images/popup-light.webp"><img src="docs/images/popup.webp" alt="UI popup thật trong fixture local an toàn, bài đang trống và quá trình quét đang chờ" width="100%"></picture></a></td><td valign="top"><a href="docs/images/settings.webp"><img src="docs/images/settings.webp" alt="UI Cài đặt thật: điều khiển giao diện và bốn bộ chọn phong cách khác nhau trong fixture local" width="100%"></a><p>Ngôn ngữ, giao diện, nhà cung cấp và tùy chọn chuyển bài ở cùng một nơi.</p></td></tr>
+</table>
+
+*Ảnh chụp UI thật từ source bằng Chrome với API tiện ích giả lập, không có dữ liệu người học. Popup ở trạng thái trống/đang quét. Đây không phải ảnh website có đăng nhập hay tiện ích đã cài. Nhấn để phóng to. UI và minh họa dùng tiếng Anh.*
+
+<a id="workflow"></a>
+## Từ quét đến xác minh trạng thái
+
+<picture><source media="(max-width: 640px)" srcset="docs/images/workflow-mobile.svg"><img src="docs/images/workflow.svg" alt="Quét, nhận diện bài, giải ánh xạ, áp dụng, xác minh; Inspector quan sát và xuất JSON độc lập, không điền đáp án" width="100%"></picture>
+
+Dừng để xem lại nếu không hỗ trợ hoặc chưa xác minh. Word Pool chạy **Trả hết → Xác nhận mọi ô trống → Điền → Kiểm tra ánh xạ**, cả với bài đã điền còn sửa được. Thay đổi từng phần có thể còn sau lỗi. Xác minh là trạng thái UI quan sát được, không bảo đảm điểm số.
+
+<a id="features"></a>
+## Khả năng hỗ trợ
+
+| Khả năng | NGL / Spark | Bộ điều hợp Generic |
+| --- | --- | --- |
+| Nhận diện | Khung có quyền và widget nền tảng hỗ trợ | Điều khiển gốc trong nhóm bài rõ ràng |
+| Nguồn đáp án | QTI hỗ trợ; dự phòng cấu hình tùy chọn | QTI nhúng tương thích với ID phản hồi duy nhất |
+| Điền | Văn bản, dropdown, radio, chọn nhiều, sắp xếp, sửa từ | Input, select, radio, checkbox gốc; từ chối ánh xạ mơ hồ |
+| Word Pool | Trả hết và điền lại qua điều khiển site hỗ trợ | Không hỗ trợ giao thức word-pool tùy biến |
+| Checkbox | ID QTI và kiểm tra tập lựa chọn; popup có thể chặn đáp án chọn nhiều | Áp dụng checked-state gốc với ánh xạ tương thích |
+| Linking Lines | Ánh xạ đầu nối, gửi thao tác; đồ thị cuối chưa xác minh | Không hỗ trợ widget nối tùy biến |
+| Nộp bài | Nộp chủ động và chuyển trong hoạt động NGL có kiểm tra | Không nộp hay tự chuyển trang |
+
+QTI XML / XML bọc JSON được phân tích có giới hạn, không thực thi script. Khai báo trên trang không tự chứng minh nguồn phát hành. NGL có thể dùng nhà cung cấp tương thích OpenAI hoặc quy tắc ngoại tuyến hạn chế; gợi ý Generic không đủ quyền Apply khi thiếu ánh xạ cục bộ cần thiết.
+
+<a id="styles"></a>
+## Bốn phong cách, bốn bố cục
+
+<table>
+<tr><th width="50%">Ventrix</th><th width="50%">Chainsaw Editorial</th></tr>
+<tr><td align="center"><a href="docs/images/popup.webp"><img src="docs/images/popup.webp" alt="Ventrix: tiêu đề căn giữa, nút bo tròn, nền tím; ảnh UI local thật" width="320"></a></td><td align="center"><a href="docs/images/style-editorial.webp"><img src="docs/images/style-editorial.webp" alt="Chainsaw Editorial: chữ có chân, vạch đỏ bất đối xứng và nút vuông; ảnh UI local thật" width="320"></a></td></tr>
+<tr><th>Cognify</th><th>InsightOS</th></tr>
+<tr><td align="center"><a href="docs/images/style-cognify.webp"><img src="docs/images/style-cognify.webp" alt="Cognify: điều khiển cyan gọn, tiêu đề có khung và bước phân đoạn; ảnh UI local thật" width="320"></a></td><td align="center"><a href="docs/images/style-insightos.webp"><img src="docs/images/style-insightos.webp" alt="InsightOS: module tối bo tròn, nút xanh chanh và nhóm tiến trình; ảnh UI local thật" width="320"></a></td></tr>
+</table>
+
+Chọn phong cách trong **Cài đặt**, tự lưu. Có theme sáng, tối, theo hệ thống. Ngôn ngữ UI: Anh, Việt, Trung giản thể, Trung phồn thể. Giao diện không thay đổi khả năng giải.
+
+<a id="inspector"></a>
+## Quan sát bằng Inspector
+
+<details>
+<summary><strong>Mở ảnh xem trước Inspector</strong></summary>
+
+<a href="docs/images/inspector.webp"><img src="docs/images/inspector.webp" alt="UI Inspector thật trong fixture local: capture, xuất JSON, ghi tương tác và số sự kiện bằng không; example.invalid là nguồn giả" width="100%"></a>
+
+*Ảnh UI local, không phải bản ghi live. Nguồn là domain giả dành riêng example.invalid. Không hiển thị đáp án, credentials hoặc định danh phiên.*
+
+</details>
+
+1. Mở Inspector từ đúng tab nguồn, kiểm tra phạm vi khung.
+2. Chụp trạng thái hoặc ghi thao tác thủ công; dừng và xem cảnh báo phạm vi/cắt dữ liệu.
+3. Xuất JSON. Chọn `inspector-data/exports` khi có trình chọn thư mục; nếu không, dùng Save As/cài đặt tải xuống rồi chép vào đó.
+
+Inspector chỉ đọc: không giải, nộp hoặc xác nhận đúng. Ghi có giới hạn, dừng sau ba phút hoặc khi điều hướng trang chính. Khung khác origin và thư mục xuất có thể cần cấp lại quyền.
+
+Phân tích local tùy chọn: `node .\tools\analyze-inspector.cjs`. Reports/prompts chỉ là đề xuất cho bước phát triển được cho phép riêng. [Quy trình](inspector-data/README.md) · [Universal Inspector](docs/UNIVERSAL_INSPECTOR.md) · [Bằng chứng chi tiết](docs/inspector-deep.md)
+
+---
 
 <a id="quick-start"></a>
-## Bắt đầu nhanh
+## Cài đặt và sử dụng
 
-**Cần Chrome và bản sao kho mã nguồn.** Không cần Git nếu tải source ZIP. Runtime tiện ích không cần build, Node.js hay cài dependency.
+**Chrome + thư mục source. Runtime không cần build hay cài dependency.** Tải source ZIP hoặc clone:
 
 ```powershell
 git clone https://github.com/imnwngr/studymate.git
 Set-Location studymate
 ```
 
-1. Mở `chrome://extensions`, bật **Developer mode**.
-2. Chọn **Load unpacked**, chọn thư mục `studymate` chứa `manifest.json`.
-3. Mở bài được hỗ trợ và đợi tải xong.
-4. Mở studymate, chọn **Quét bài**, kiểm tra bài/khung đã nhận diện.
-5. Chọn **Giải bài**. Kết quả đủ điều kiện được áp dụng; kiểm tra kết quả chưa chắc chắn hoặc bị bỏ qua trên trang thật.
+1. Mở `chrome://extensions`, bật **Developer mode**, chọn **Load unpacked** và thư mục chứa `manifest.json`.
+2. Mở bài, mở studymate, chọn **Quét bài**, kiểm tra khung rồi **Giải bài**.
+3. Xem kết quả thực tế. Đợi Word Pool trả hết và điền xong trước khi thao tác tiếp.
+4. Chỉ dùng **Hoàn tất và tiếp tục** khi nút bật và bạn muốn nộp. NGL có thể chuyển màn hình trong hoạt động sau kiểm tra; nút thay đổi không chứng minh điểm đã lưu.
 
-**Cập nhật:** pull source mới, reload tiện ích trong Chrome rồi làm mới tab bài tập. Nếu thư mục của tiện ích unpacked đã đổi tên, gỡ mục unpacked cũ và load thư mục mới; kiểm tra lại quyền và cài đặt.
-
-**Nộp bài:** chỉ dùng **Hoàn tất và tiếp tục** khi nút bật và bạn muốn nộp. NGL có thể chuyển màn hình trong cùng hoạt động sau khi vượt kiểm tra. Generic không nộp hay tự chuyển trang. Nút đổi trạng thái không chứng minh điểm đã lưu.
-
----
-
-<a id="features"></a>
-## Luồng được hỗ trợ
-
-| Khả năng | NGL / Spark | Bộ điều hợp Generic |
-| --- | --- | --- |
-| Nhận diện | Khung bài có quyền truy cập và widget nền tảng được hỗ trợ | Điều khiển HTML gốc trong nhóm bài rõ ràng |
-| Nguồn đáp án | QTI được hỗ trợ; dự phòng đã cấu hình là tùy chọn | QTI nhúng tương thích, định danh phản hồi duy nhất |
-| Điền | Văn bản, dropdown, radio, chọn nhiều, sắp xếp và sửa từ, tùy kiểm tra widget | Input, select, radio, checkbox gốc; từ chối điều khiển/ánh xạ không hỗ trợ |
-| Word Pool | Trả mọi thẻ, xác nhận ô trống rồi điền theo QTI | Không có giao thức word-pool riêng nền tảng |
-| Checkbox | ID QTI và kiểm tra tập lựa chọn; popup có thể chặn một số đáp án chọn nhiều | Áp dụng checked-state gốc với ánh xạ tương thích |
-| Linking Lines | Ánh xạ đầu nối QTI và gửi thao tác; đồ thị cuối chưa xác minh | Không hỗ trợ widget nối tùy biến |
-| Nộp / chuyển màn hình | Nộp chủ động và chuyển trong hoạt động có kiểm tra | Không hỗ trợ |
-
-QTI XML hoặc XML bọc JSON được phân tích có giới hạn, không thực thi script nhúng. Khai báo đáp án trên trang không tự chứng minh nguồn phát hành hoặc điểm số đúng.
-
-Word Pool chạy **Trả hết → Xác nhận trống → Điền → Kiểm tra ánh xạ**, cả với bài đã điền còn sửa được. Dừng khi không xác minh được chuyển trạng thái; thay đổi từng phần thành công có thể còn lại. Đợi xong trước khi thao tác tiếp.
-
-### AI và ngoại tuyến tùy chọn
-
-Luồng NGL có thể dùng nhà cung cấp tương thích OpenAI đã cấu hình hoặc quy tắc ngoại tuyến hạn chế. API gửi câu hỏi/lựa chọn tới nhà cung cấp và có thể phát sinh phí. Ngoại tuyến không gọi nhà cung cấp đó. Gợi ý AI/nhập tay cho Generic không đủ quyền Apply khi thiếu ánh xạ cục bộ cần thiết.
-
-### Bốn phong cách giao diện
-
-| Phong cách | Cách trình bày |
-| --- | --- |
-| Ventrix | Chữ căn giữa, ánh tím ở chân nền |
-| Chainsaw Editorial | Tiêu đề có chân, khung đen và đỏ |
-| Cognify | Điều khiển rõ ràng, điểm nhấn cyan |
-| InsightOS | Mảng tối, điểm nhấn xanh chanh |
-
-Chọn phong cách trong **Cài đặt**, tự động lưu. Có theme sáng, tối, theo hệ thống và ngôn ngữ Anh, Việt, Trung giản thể, Trung phồn thể. Đổi giao diện không đổi khả năng giải.
-
-<a id="inspector"></a>
-## Inspector
-
-Inspector quan sát; không giải, nộp, mô phỏng thao tác hoặc xác nhận đáp án đúng.
-
-1. Mở Inspector từ đúng tab nguồn, kiểm tra phạm vi khung.
-2. Chụp trạng thái hoặc bắt đầu ghi rồi thao tác thủ công.
-3. Dừng ghi, đọc cảnh báo phạm vi, thiếu trạng thái đầu/cuối và cắt dữ liệu.
-4. Xuất JSON, kiểm tra trước chia sẻ.
-
-Phiên ghi có giới hạn, tự dừng sau ba phút. Điều hướng trang chính dừng phiên; các thế hệ tài liệu khung con được theo dõi riêng. NGL deep capture và Generic structural capture giữ loại bằng chứng khác nhau.
-
-Chọn `inspector-data/exports` nếu trình chọn thư mục được hỗ trợ. Chrome có thể hỏi lại quyền. Nếu không, dùng Save As hoặc cài đặt tải xuống rồi chép export vào đó. Tiện ích không tự ghi vào thư mục source khi chưa được cho phép.
-
-Phân tích cục bộ tùy chọn chỉ cần Node.js và module có sẵn:
-
-```powershell
-# Chạy từ thư mục gốc của kho.
-node .\tools\analyze-inspector.cjs
-```
-
-Báo cáo/prompt là đề xuất cho bước phát triển được cho phép riêng, không tự sửa adapter. Xem [quy trình Inspector](inspector-data/README.md), [Universal Inspector](docs/UNIVERSAL_INSPECTOR.md), [bằng chứng chi tiết](docs/inspector-deep.md).
-
----
+**Cập nhật:** pull source, reload tiện ích, làm mới tab bài. Nếu thư mục đã đổi tên, load vị trí mới và kiểm tra quyền/cài đặt. Version 0.8.0 không ngụ ý có Chrome Web Store hoặc GitHub Release.
 
 <a id="privacy"></a>
-## Riêng tư và quyền truy cập
+## Riêng tư, quyền và giới hạn
 
-| Quyền / dữ liệu | Mục đích và giới hạn |
+| Quyền | Mục đích |
 | --- | --- |
-| `activeTab`, `scripting` | Truy cập do người dùng yêu cầu và chèn script vào khung có quyền |
-| `webNavigation` | Tìm cấu trúc khung của tab |
-| `storage` | Lưu tùy chọn và cấu hình nhà cung cấp cục bộ |
+| `activeTab`, `scripting`, `webNavigation` | Truy cập do người dùng yêu cầu, chèn script có quyền và tìm khung |
+| `storage` | Cấu hình cục bộ, không phải kho bí mật bảo vệ tuyệt đối |
 | Host khai báo | NGL, khung Avallain và origin API OpenAI |
 | HTTPS / localhost tùy chọn | Endpoint/khung được cho phép; khai báo không tự cấp quyền |
 
-Khung khác origin có thể cần quyền riêng. Trang trình duyệt bị hạn chế và Shadow DOM đóng không truy cập được. Khóa/cấu hình lưu trong Chrome local storage, không phải kho bí mật bảo vệ tuyệt đối.
+API gửi câu hỏi/lựa chọn tới nhà cung cấp đã cấu hình, có thể phát sinh phí; ngoại tuyến không gọi nhà cung cấp. Inspector không chủ động đọc cookie, kho xác thực hay mô hình ứng dụng. Giá trị nhập được che, nhưng nội dung NGL, đáp án chọn, ID DOM, tiêu đề và đường dẫn URL có thể còn. Một số chẩn đoán lỗi Solve có thể chứa đáp án. **Kiểm tra export/log trước chia sẻ.**
 
-Inspector không chủ động đọc cookie, kho xác thực hay mô hình ứng dụng. Giá trị nhập được che, nhưng nội dung NGL, đáp án chọn, ID DOM, tiêu đề và đường dẫn URL có thể còn. Một số chẩn đoán lỗi Solve có thể chứa nội dung đáp án. **Kiểm tra export/log trước chia sẻ; tránh trang nhạy cảm.**
+<details>
+<summary><strong>Giới hạn đã biết và dữ liệu local</strong></summary>
 
-Recordings, reports, prompts, browser profiles, credentials và artifacts local được giữ ngoài Git bằng ignore rules. Các quy tắc không xác định gói ZIP an toàn. Schema, tên export, storage key và hợp đồng `SPARK_*` giữ tên tương thích; NGL / Spark vẫn là tên nền tảng bên ngoài.
+- Popup Checkbox có thể chặn một số đáp án chọn nhiều trước Apply.
+- Linking Lines không xác minh chính xác kết nối cuối; kiểm tra thủ công.
+- Nhiều khung bài có thể mơ hồ. Generic từ chối widget không hỗ trợ/tùy biến, thiếu ánh xạ hoặc DOM cũ.
+- Không truy cập được trang trình duyệt bị hạn chế và Shadow DOM đóng.
+- Trả Word Pool và trạng thái ứng dụng giữ lại cần retest có đăng nhập cho bài cụ thể. Test mô phỏng không chứng minh site thật.
+- Không đưa recordings, reports, prompts, browser profiles, credentials và artifacts riêng tư vào Git/gói chia sẻ. Ignore không phải chính sách ZIP an toàn.
+- Tên schema/export cũ, storage key và hợp đồng `SPARK_*` giữ tương thích; NGL / Spark là nền tảng bên ngoài.
 
-<a id="structure"></a>
-## Cấu trúc dự án
+</details>
+
+<a id="development"></a>
+## Phát triển
+
+<details>
+<summary><strong>Cấu trúc dự án và lệnh kiểm thử</strong></summary>
 
 ```text
 studymate/
-├── manifest.json             Metadata và quyền tiện ích
-├── popup.* / options.*       Luồng bài tập và Cài đặt
-├── core/                    Đăng ký site, khung và runtime
-├── adapters/                Nhận diện/áp dụng NGL và Generic
-├── answer-sources/          Tích hợp QTI nhúng
-├── solvers/                 Bộ giải tương tác dùng chung
-├── inspector*.js            Capture và export chỉ đọc
-├── tools/                   Phân tích cục bộ tùy chọn
-├── tests/                   Node test và fixture browser mô phỏng
-├── docs/                    Kiến trúc và quy trình
-└── inspector-data/          Dữ liệu riêng tư; chỉ track README/placeholder
+├── core/ · adapters/        Điều phối khung/runtime và adapter site
+├── answer-sources/         Tích hợp QTI nhúng
+├── solvers/                Bộ giải tương tác dùng chung
+├── popup.* · options.*     Luồng bài và Cài đặt
+├── inspector*.js           Capture/export chỉ đọc
+├── tests/ · tools/         Kiểm thử và phân tích local
+└── docs/ · inspector-data/ Tài liệu và bằng chứng local riêng tư
 ```
 
-<a id="development"></a>
-## Phát triển và kiểm thử
-
-Test Node không cần npm package. Fixture Chrome cần Chrome/Chromium đã cài; runner hỗ trợ nhận `SPARK_BROWSER`. Runner Python tùy chọn cần Python và Playwright.
+Test Node không cần npm package. Fixture browser cần Chrome/Chromium đã cài; runner hỗ trợ nhận `SPARK_BROWSER`. Runner Python tùy chọn cần Python và Playwright.
 
 ```powershell
 node --test --test-isolation=none tests/*.test.js tests/*.test.cjs
@@ -147,20 +151,12 @@ node tests/run-browser-inspector-universal.cjs
 node tests/run-browser-linking.cjs
 ```
 
-Test bằng chứng riêng tư có thể skip khi thiếu fixture local; một số kiểm tra phát triển vẫn tham chiếu tệp audit bị ignore. Bảo toàn thay đổi không liên quan và phân biệt test mô phỏng với website có đăng nhập. Đọc [kiến trúc multisite](docs/MULTISITE_ARCHITECTURE.md) trước khi đổi hợp đồng runtime.
+Test bằng chứng riêng tư có thể skip khi thiếu fixture; một số kiểm tra cần audit file bị ignore. Xem [kiến trúc](docs/MULTISITE_ARCHITECTURE.md) và [nguồn gốc hình ảnh](docs/images/README.md). Bảo toàn thay đổi không liên quan; phân biệt test mô phỏng và kiểm tra có đăng nhập.
 
-<a id="limitations"></a>
-## Giới hạn đã biết
-
-- Popup Checkbox có thể chặn một số đáp án chọn nhiều trước Apply.
-- Linking Lines gửi thao tác nhưng chưa xác minh chính xác kết nối cuối; kiểm tra thủ công.
-- Nhiều khung bài có thể gây mơ hồ; kiểm tra bài đã chọn.
-- Generic cần ánh xạ nhúng tương thích; có thể từ chối widget tùy biến hoặc DOM cũ.
-- Thao tác trả Word Pool và trạng thái được ứng dụng giữ lại vẫn cần retest có đăng nhập cho bài cụ thể.
-- Test mô phỏng thành công không chứng minh tương thích site thật hoặc điểm đã lưu.
+</details>
 
 ---
 
-[Kho mã nguồn](https://github.com/imnwngr/studymate) · [Changelog](CHANGELOG.md) · [English guide](README.md)
+[Kho mã nguồn](https://github.com/imnwngr/studymate) · [Changelog](CHANGELOG.md) · [English](README.md)
 
-Không có tệp giấy phép độc lập. Đổi tên không cấp quyền phân phối mới.
+Không có tệp giấy phép độc lập. Tài liệu không cấp thêm quyền phân phối.

@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="600" viewBox="0 0 1440 600" role="img" aria-labelledby="title desc">
+<title id="title">From scan to verified state, with Inspector as an independent observer</title>
+<desc id="desc">Scan leads to exercise detection, mapping resolution, Apply and Verify. Unsupported or unverified transitions stop for review. Inspector observes the page and exports JSON independently; it does not apply or verify answers.</desc>
+<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#0e1020"/><stop offset="1" stop-color="#17142c"/></linearGradient><marker id="arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="m0 0 6 3.5L0 7" fill="none" stroke="#b9a7ef" stroke-width="1.5"/></marker></defs>
+<rect width="1440" height="600" rx="24" fill="url(#bg)"/>
+<g font-family="Segoe UI,Arial,sans-serif">
+<path d="M52 55h48" stroke="#a48aff" stroke-width="3"/><text x="116" y="61" fill="#c5b8ed" font-size="17" letter-spacing="1">THE SUPPORTED APPLY PATH</text>
+<text x="52" y="115" fill="#f4f1fc" font-size="39" font-weight="600">From page to verified state.</text>
+<g fill="#1b1b31" stroke="#514363"><rect x="52" y="157" width="238" height="166" rx="14"/><rect x="326" y="157" width="238" height="166" rx="14"/><rect x="600" y="157" width="238" height="166" rx="14"/><rect x="874" y="157" width="238" height="166" rx="14"/><rect x="1148" y="157" width="238" height="166" rx="14"/></g>
+<g fill="none" stroke="#b9a7ef" stroke-width="2" marker-end="url(#arrow)"><path d="M295 240h23"/><path d="M569 240h23"/><path d="M843 240h23"/><path d="M1117 240h23"/></g>
+<g fill="#bba8f3" font-size="18"><text x="74" y="191">01</text><text x="348" y="191">02</text><text x="622" y="191">03</text><text x="896" y="191">04</text><text x="1170" y="191">05</text></g>
+<g fill="#f1ecff" font-size="25" font-weight="600"><text x="74" y="232">Scan</text><text x="348" y="232">Detect exercise</text><text x="622" y="232">Resolve mapping</text><text x="896" y="232">Apply</text><text x="1170" y="232">Verify</text></g>
+<g fill="#c1bdd1" font-size="18"><text x="74" y="271">Read accessible</text><text x="74" y="296">frames and controls</text><text x="348" y="271">Select supported</text><text x="348" y="296">interaction adapter</text><text x="622" y="271">Require an eligible</text><text x="622" y="296">answer / QTI mapping</text><text x="896" y="271">Use the website's</text><text x="896" y="296">supported controls</text><text x="1170" y="271">Inspect observed</text><text x="1170" y="296">result and identities</text></g>
+<path d="M1266 323v28h-363" fill="none" stroke="#8878a9" stroke-width="1.5"/><text x="897" y="383" fill="#cfc1e5" font-size="18">Unverified or unsupported? Stop and review.</text>
+<path d="M172 323v91" fill="none" stroke="#67cddc" stroke-width="2" stroke-dasharray="5 6"/>
+<rect x="52" y="414" width="1334" height="132" rx="16" fill="#111d2a" stroke="#3d646f"/>
+<text x="76" y="451" fill="#8bdfeb" font-size="17" letter-spacing="1">SEPARATE READ-ONLY PATH</text>
+<text x="76" y="494" fill="#edf9fc" font-size="28" font-weight="600">Inspector</text>
+<text x="279" y="493" fill="#c0d9e1" font-size="20">Observe page</text><path d="M440 485h47" stroke="#8bdfeb" stroke-width="2"/><text x="510" y="493" fill="#c0d9e1" font-size="20">Capture / record</text><path d="M680 485h47" stroke="#8bdfeb" stroke-width="2"/><text x="750" y="493" fill="#c0d9e1" font-size="20">Export JSON</text>
+<text x="1007" y="480" fill="#aac6d0" font-size="18">No answer application.</text><text x="1007" y="508" fill="#aac6d0" font-size="18">No correctness claim.</text>
+<text x="52" y="578" fill="#aba4bf" font-size="16">Verification refers to observed UI state, not guaranteed grading or saved scores.</text>
+</g></svg>
