@@ -1,0 +1,107 @@
+<!doctype html><html><head><meta charset="utf-8"><style>.im-marking__item-button{display:inline-block;min-width:35px;min-height:25px}button{min-width:35px;min-height:25px}</style></head><body>
+<h1 class="learningObject__title">Synthetic | Pronunciation | 1</h1>
+<div id="content_wrap_0" class="content-wrap"><div class="layout__content"></div></div>
+<script>window.chrome={runtime:{onMessage:{addListener(fn){window.request=(type,extra={})=>new Promise(resolve=>fn({type,...extra},null,response=>{if(!response.ok)throw Error(response.error);resolve(response.result);}));}}}};</script>
+<script src="/cdn_proxy/synthetic/data.js"></script><script src="/qti.js"></script><script src="/core/site-registry.js"></script><script src="/solvers/interactions.js"></script><script src="/solvers/sequence.js"></script><script src="/solvers/text-correction.js"></script><script src="/answer-sources/embedded-qti.js"></script><script src="/core/runtime.js"></script><script src="/adapters/ngl.js"></script><script src="/adapters/generic.js"></script><script src="/content.js"></script>
+<script>
+(async()=>{
+const assert=(value,message)=>{if(!value)throw Error(message);};
+const container=document.querySelector('.layout__content'),cases=[],groups=[['ba','ck'],['ba','nd','s']];
+let marked=new Map(),mode='mark',log=[],variant='',generation=0;
+function render(){
+ const widget=document.createElement('section');widget.className='interaction im-marking ic-speaking-and-recording';
+ widget.innerHTML='<button class="im-marking__button toggle color-f9c52a '+(mode==='mark'?'activated':'')+'">Option 1</button>'+
+ '<button class="im-marking__button erase '+(mode==='erase'?'activated':'')+'">Eraser</button>';
+ let index=0;
+ for(const group of groups){
+  const block=document.createElement('div');block.className='contentblock';const p=document.createElement('p');
+  for(const label of group){
+   const item=document.createElement('span');item.className='im-marking__item markable';item.dataset.index=index;
+   if(marked.has(index)){item.classList.add('marked','imMarking__item--marked');item.style.backgroundColor=marked.get(index);}
+   item.innerHTML='<span class="im-marking__item-button" role="button" tabindex="0"><span class="icon">.</span><span id="markable-content-'+generation+'-'+index+'">'+label+'</span></span>';
+   p.append(item);index++;
+  }
+  block.append(p);widget.append(block);
+ }
+ if(variant==='missing control')widget.querySelector('.erase').remove();
+ if(variant==='multiple options')widget.append(widget.querySelector('.toggle').cloneNode(true));
+ if(variant==='missing target')widget.querySelector('[data-index="4"]').remove();
+ if(variant==='disabled target')widget.querySelector('.im-marking__item-button').setAttribute('aria-disabled','true');
+ container.replaceChildren(widget);generation++;
+}
+container.addEventListener('click',event=>{
+ const button=event.target.closest('.im-marking__button');
+ if(button){
+  log.push(button.classList.contains('erase')?'activate erase':'activate mark');
+  if(variant==='eraser activation failure')return;
+  mode=button.classList.contains('erase')?'erase':'mark';render();return;
+ }
+ const segment=event.target.closest('.im-marking__item-button');if(!segment)return;
+ const index=Number(segment.parentElement.dataset.index);log.push(mode+':'+index);
+ if(mode==='erase'){
+  if(variant==='eraser failure')return;
+  marked.delete(index);
+ }else{
+  assert(![...marked.keys()].some(i=>![0,3].includes(i)),'marking began before reset');
+  if(variant==='mark failure')return;
+  marked.set(index,variant==='wrong color'?'#000000':'#f9c52a');
+  if(variant==='extra selection')marked.set(4,'#f9c52a');
+ }
+ render();
+});
+const correct=()=>marked.size===2&&marked.get(0)==='#f9c52a'&&marked.get(3)==='#f9c52a';
+const parse=source=>SparkQTI.fromDataJs(source,[{id:'q1',kind:'pronunciation',applyable:true,markingGroups:groups,markingColor:'#f9c52a'}],new DOMParser());
+const source='ajaxData = '+JSON.stringify(ajaxData)+';';
+for(const [name,initial] of [
+ ['empty',[]],['already correct',[0,3]],['all incorrect',[1,2,4]],['mixed',[0,2,3,4]],['all selected',[0,1,2,3,4]],
+ ['duplicate text and multiple groups',[]],['rerender reset and mark',[1,2,4]],['repeated solve',[0,3]],
+ ['missing QTI',[1]],['ambiguous QTI',[1]],['missing control',[1]],['multiple options',[1]],['missing target',[1]],
+ ['disabled target',[1]],['eraser failure',[1]],['eraser activation failure',[1]],['mark failure',[]],['wrong color',[]],['extra selection',[]],['changed after QTI',[1]]]){
+ variant=name;mode='mark';marked=new Map(initial.map(i=>[i,'#f9c52a']));log=[];render();
+ const before=JSON.stringify([...marked]),scan=await request('SPARK_SCAN');
+ assert(scan.questions[0]?.kind==='pronunciation',name+': detection');
+ if(['missing control','multiple options','disabled target'].includes(name))assert(!scan.questions[0].applyable,name+': controls');
+ if(name==='ambiguous QTI'){
+  const duplicate={...ajaxData,'second.xml':ajaxData['synthetic.xml']};
+  assert(parse('ajaxData = '+JSON.stringify(duplicate)+';').reason==='ambiguousAssessment','ambiguous QTI accepted');
+ }else if(name!=='missing QTI'){
+  const qti=await request('SPARK_QTI',{ids:['q1']});
+  if(!['missing control','multiple options','disabled target','missing target'].includes(name))
+   assert(qti.answers[0]?.markingVerified,name+': trusted mapping');
+ }
+ if(name==='changed after QTI')container.querySelector('[id^="markable-content-"]').textContent='changed';
+ const response=await request('SPARK_APPLY',{answers:[{id:'q1',answer:'preview',targets:[{group:99,segment:99}]}]});
+ const refusals=['missing QTI','ambiguous QTI','missing control','multiple options','missing target','disabled target','changed after QTI'];
+ const failures=['eraser failure','eraser activation failure','mark failure','wrong color','extra selection'];
+ if(refusals.includes(name)){
+  assert(response[0].status!=='filled'&&log.length===0&&JSON.stringify([...marked])===before,name+': refusal mutated exercise');
+ }else if(failures.includes(name)){
+  assert(response[0].status!=='filled',name+': false success');
+  if(name.startsWith('eraser'))assert(!log.some(s=>s==='activate mark'||s.startsWith('mark:')),name+': marking after reset failure');
+ }else{
+  assert(response[0].status==='filled'&&correct(),name+': exact final set '+JSON.stringify(response));
+  assert(log[0]==='activate erase',name+': missing reset');
+  const markAt=log.indexOf('activate mark'),resetClicks=log.slice(0,markAt).filter(s=>s.startsWith('erase:'));
+  assert(markAt>=0&&resetClicks.length===initial.length,name+': reset did not clear all prior selections');
+  assert(log.slice(markAt+1).join(',')==='mark:0,mark:3',name+': structural mapping');
+  log=[];
+  const again=await request('SPARK_APPLY',{answers:[{id:'q1',answer:'preview'}]});
+  assert(again[0].status==='filled'&&correct()&&log.join(',')==='activate erase,erase:0,erase:3,activate mark,mark:0,mark:3',name+': repeated solve skipped reset');
+ }
+ cases.push(name);
+}
+for(const [name,change] of [
+ ['missing answer',xml=>xml.replace('GT1 G0 G3','GT1 G99')],
+ ['duplicate answer',xml=>xml.replace('GT1 G0 G3','GT1 G0 G0')],
+ ['duplicate gap identity',xml=>xml.replace('identifier="G1"','identifier="G0"')],
+ ['wrong option',xml=>xml.replace('GT1 G0 G3','GT2 G0 G3')],
+ ['wrong segment',xml=>xml.replace('label="nd"','label="XX"')],
+ ['not marking QTI',xml=>xml.replace('Identify:Mark:Marking','SomethingElse')]]){
+ assert(parse('ajaxData = '+JSON.stringify({'synthetic.xml':change(ajaxData['synthetic.xml'])})+';').answers.length===0,name);
+ cases.push(name);
+}
+container.innerHTML='<section class="interaction ic-speaking-and-recording"><button>Microphone</button></section>';
+const microphone=await request('SPARK_SCAN');assert(!microphone.questions.some(q=>q.kind==='pronunciation'),'microphone misdetected');cases.push('microphone excluded');
+document.body.append(Object.assign(document.createElement('pre'),{id:'test-result',textContent:JSON.stringify({passed:cases.length,cases})}));
+})().catch(error=>document.body.append(Object.assign(document.createElement('pre'),{id:'test-error',textContent:error.stack||String(error)})));
+</script></body></html>

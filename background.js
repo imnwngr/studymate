@@ -1,4 +1,4 @@
-importScripts('solver.js', 'providers.js');
+importScripts('solver.js', 'providers.js', 'video-transport.js', 'video-gemini.js', 'text-writing-ai.js');
 'use strict';
 
 const MAX_QUESTIONS = 100;
@@ -8,7 +8,7 @@ function errMessage(error) {
   return String(error?.message || error || 'Lỗi không xác định').slice(0,250);
 }
 
-async function solveWithProfile(payload, profile) {
+async function solveWithProfile(payload, profile, writing=false) {
   const p=SparkProviders.validateProfile(profile);
   const pattern=SparkProviders.originPattern(p.endpoint);
   if(!await chrome.permissions.contains({origins:[pattern]})) {
@@ -22,18 +22,22 @@ async function solveWithProfile(payload, profile) {
     if(p.apiKey)headers.Authorization=`Bearer ${p.apiKey}`;
     const response=await fetch(p.endpoint,{
       method:'POST',headers,signal:controller.signal,redirect:'error',
-      body:JSON.stringify(SparkProviders.requestBody(p,payload))
+      body:JSON.stringify(writing?SparkTextWritingAI.request(p,payload):SparkProviders.requestBody(p,payload))
     });
+    if(!response.ok) {
+      const reasons={400:'Yêu cầu không hợp lệ. Kiểm tra model và cấu hình.',401:'API key không hợp lệ.',403:'API key không có quyền truy cập model.',404:'Không tìm thấy endpoint hoặc model không khả dụng.',429:'Đã vượt quota hoặc giới hạn tốc độ. Thử lại sau và kiểm tra quota.'};
+      throw new Error('HTTP '+response.status+': '+(reasons[response.status]||'Máy chủ API không khả dụng.'));
+    }
     let body;
     try {body=await response.json();}
-    catch {throw new Error(`Máy chủ trả HTTP ${response.status}, không phải JSON.`);}
-    if(!response.ok) {
-      // Do not echo arbitrary server content which might include credentials.
-      const serverCode=typeof body?.error?.code==='string'?body.error.code.slice(0,80):'';
-      throw new Error(`HTTP ${response.status}${serverCode?' ('+serverCode+')':''}. Kiểm tra endpoint, model, key và định dạng JSON.`);
-    }
+    catch {throw new Error('Máy chủ không trả JSON hợp lệ.');}
+    if(writing)return {profile:p,answer:SparkTextWritingAI.parse(body)};
     const raw=SparkProviders.parseContent(body?.choices?.[0]?.message?.content);
     return {profile:p,answers:SparkProviders.normalizeAnswers(payload,raw,p)};
+  } catch(error) {
+    if(error?.name==='AbortError')throw new Error('Kết nối API quá thời gian chờ.');
+    if(error instanceof TypeError)throw new Error('Không thể kết nối máy chủ API.');
+    throw error;
   } finally {clearTimeout(timeout);}
 }
 
@@ -71,7 +75,37 @@ async function runSolver(payload) {
   return compared;
 }
 
+let activeVideoOperation=null;
 chrome.runtime.onMessage.addListener((msg,sender,sendResponse)=>{
+  if(msg?.type==='SPARK_TEST_PROVIDER') {
+    if(sender.id!==chrome.runtime.id || sender.url!==chrome.runtime.getURL('options.html'))return false;
+    const payload={title:'Connection test',questions:[{id:'test',kind:'text',context:'Say hello.',options:[]}]};
+    solveWithProfile(payload,msg.profile).then(()=>sendResponse({ok:true}),error=>sendResponse({ok:false,error:errMessage(error)}));
+    return true;
+  }
+  if(msg?.type==='SPARK_TEXT_WRITING') {
+    if(sender.id!==chrome.runtime.id || sender.url!==chrome.runtime.getURL('popup.html'))return false;
+    (async()=>{
+      if(chrome.storage.local.setAccessLevel)await chrome.storage.local.setAccessLevel({accessLevel:'TRUSTED_CONTEXTS'});
+      const stored=await chrome.storage.local.get(['aiProfiles','aiMode','activeProfileId','apiKey','model','useAI']);
+      const profile=SparkProviders.resolveWritingProfile(stored);
+      const result=await solveWithProfile(msg.exercise,profile,true);
+      return result.answer;
+    })().then(answer=>sendResponse({ok:true,answer}),error=>sendResponse({ok:false,error:errMessage(error),code:error.code||'AI_REQUEST_FAILED'}));
+    return true;
+  }
+  if(msg?.type==='SPARK_VIDEO_CANCEL') {
+    if(sender.id!==chrome.runtime.id || sender.url!==chrome.runtime.getURL('popup.html'))return false;
+    if(activeVideoOperation?.id===msg.operationId)activeVideoOperation.controller.abort();
+    sendResponse({ok:true});return false;
+  }
+  if(msg?.type==='SPARK_VIDEO_SOLVE') {
+    if(sender.id!==chrome.runtime.id || sender.url!==chrome.runtime.getURL('popup.html'))return false;
+    if(activeVideoOperation){sendResponse({ok:false,error:'Một tác vụ video đang chạy.'});return false;}
+    const operation={id:msg.operationId,controller:new AbortController()};activeVideoOperation=operation;
+    SparkVideoGemini.solve(msg.payload,{signal:operation.controller.signal}).then(answer=>sendResponse({ok:true,answer}),error=>sendResponse({ok:false,error:errMessage(error)})).finally(()=>{if(activeVideoOperation===operation)activeVideoOperation=null;});
+    return true;
+  }
   if(msg?.type!=='SPARK_SOLVE')return false;
   runSolver(msg.payload)
     .then(result=>sendResponse({ok:true,result}),error=>sendResponse({ok:false,error:errMessage(error)}));

@@ -2,7 +2,7 @@
 <h1 align="center">studymate</h1>
 <p align="center"><strong>Xem bài. Áp dụng dựa trên bằng chứng.</strong></p>
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.8.0-555555?style=flat-square" alt="Phiên bản 0.8.0">
+  <img src="https://img.shields.io/badge/version-0.8.1-555555?style=flat-square" alt="Phiên bản 0.8.1">
   <img src="https://img.shields.io/badge/browser-Chrome-555555?style=flat-square" alt="Chrome">
   <img src="https://img.shields.io/badge/extension-Manifest_V3-555555?style=flat-square" alt="Manifest V3">
 </p>
@@ -97,7 +97,7 @@ Set-Location studymate
 3. Xem kết quả thực tế. Đợi Word Pool trả hết và điền xong trước khi thao tác tiếp.
 4. Chỉ dùng **Hoàn tất và tiếp tục** khi nút bật và bạn muốn nộp. NGL có thể chuyển màn hình trong hoạt động sau kiểm tra; nút thay đổi không chứng minh điểm đã lưu.
 
-**Cập nhật:** pull source, reload tiện ích, làm mới tab bài. Nếu thư mục đã đổi tên, load vị trí mới và kiểm tra quyền/cài đặt. Version 0.8.0 không ngụ ý có Chrome Web Store hoặc GitHub Release.
+**Cập nhật:** pull source, reload tiện ích, làm mới tab bài. Nếu thư mục đã đổi tên, load vị trí mới và kiểm tra quyền/cài đặt. Version 0.8.1 không ngụ ý có Chrome Web Store hoặc GitHub Release.
 
 <a id="privacy"></a>
 ## Riêng tư, quyền và giới hạn

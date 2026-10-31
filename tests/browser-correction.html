@@ -1,0 +1,150 @@
+<!doctype html><html><head><meta charset="utf-8"><style>.input-text{display:inline-block;min-width:24px;min-height:24px}.tc_popup{padding:12px}input{min-height:24px}</style></head><body>
+<h1 class="learningObject__title">Synthetic | Grammar | 2</h1><div id="content_wrap_0" class="content-wrap"><div class="layout__content"></div></div>
+<script>window.chrome={runtime:{onMessage:{addListener(fn){window.request=(type,extra={})=>new Promise(resolve=>fn({type,...extra},null,response=>{if(!response.ok)throw Error(response.error);resolve(response.result);}));}}}};</script>
+<script src="/tests/correction-fixture.js"></script><script type="text/plain" src="/cdn_proxy/correction/data.js"></script>
+<script src="/qti.js"></script><script src="/core/site-registry.js"></script><script src="/solvers/interactions.js"></script><script src="/solvers/sequence.js"></script><script src="/solvers/text-correction.js"></script><script src="/answer-sources/embedded-qti.js"></script><script src="/core/runtime.js"></script><script src="/adapters/ngl.js"></script><script src="/adapters/generic.js"></script><script src="/content.js"></script>
+<script>
+(async()=>{
+const cases=[],failed=[],area=document.querySelector('.layout__content');let fixture,config,values,originalText,modified,openIndex=null,opens,commits,inputs,changes,log,correcting,timers=[],sequence=0;
+const assert=(v,m)=>{if(!v)throw Error(m);};
+const later=(fn,delay)=>{if(delay)timers.push(setTimeout(fn,delay));else fn();};
+function render(){
+ const root=document.createElement('section');root.className='interaction ic-text-correction replace ic-speaking-and-recording';let index=0;
+ for(const group of fixture.groups){const block=document.createElement('div');block.className='contentblock ki24_view';
+  for(const token of group){const node=document.createElement('span');node.className='input-text';node.dataset.index=index;
+   if(modified.has(index))node.classList.add('modified','icTextCorrection__item--modified');if(index===openIndex)node.classList.add('editing');
+   node.textContent=values[index++];block.append(node,document.createTextNode(' '));
+  }root.append(block);
+ }
+ if(config.missingToken)root.querySelector('.ki24_view:last-child .input-text:last-of-type').remove();
+ area.replaceChildren(root);
+}
+function popup(index){
+ if(config.noPopup)return;
+ openIndex=config.wrongOwner?0:index;render();
+ let sentence=0,offset=0;while(index>=offset+fixture.groups[sentence].length)offset+=fixture.groups[sentence++].length;
+ const root=area.firstElementChild,block=root.querySelectorAll('.ki24_view')[config.wrongOwner?0:sentence];
+ const editor=document.createElement('div');editor.className='tc_popup';editor.innerHTML='<h1>Original</h1><input type="text"><a class="button-submit" href="#">OK</a>';
+ const field=editor.querySelector('input');field.value=values[index];let staged=null,inputSeen=false,changeSeen=false;
+ field.addEventListener('input',()=>{inputs++;inputSeen=true;staged=field.value;if(config.inputFailure)field.value='rejected';if(config.inputRerender)render();});
+ field.addEventListener('change',()=>{changes++;changeSeen=true;staged=field.value;});
+ const ok=editor.querySelector('a');
+ if(config.missingOk||(config.secondMissingOk&&commits===1))ok.remove();else ok.addEventListener('click',event=>{
+  event.preventDefault();assert(inputSeen&&changeSeen,'input/change events missing');
+  const phase=staged===originalText[index]?'reset':'correct';
+  if(phase==='correct'&&!correcting){assert(values.every((v,i)=>v===originalText[i]),'correcting began before complete original reset');correcting=true;}
+  if(phase==='reset')assert(!correcting,'reset after correction phase started');
+  log.push({phase,index,value:staged});
+  later(()=>{
+   if(!config.noSave&&!(config.resetFail&&phase==='reset')){values[index]=staged;modified.add(index);commits++;}
+   if(config.clearModified&&phase==='reset')modified.delete(index);
+   openIndex=null;render();
+   if(config.popupStays)area.firstElementChild.append(editor);
+   if(config.unrelatedChange){values[0]='unexpected';render();}
+  },config.commitDelay||0);
+ });
+ block.append(editor);
+}
+area.addEventListener('click',event=>{
+ const token=event.target.closest('span.input-text');if(!token)return;
+ const index=Number(token.dataset.index);opens++;later(()=>popup(index),config.popupDelay||0);
+});
+const scenarios=[
+ {name:'original five sentence exercise'},
+ {name:'previously modified targets',wrong:true,markModified:true},
+ {name:'all incorrect targets without modified class',wrong:true},
+ {name:'mixed correct and incorrect',mixed:true},
+ {name:'all correct without modified class',correct:true},
+ {name:'repeated Solve',repeat:true},
+ {name:'duplicate original words by sentence position'},
+ {name:'multi-word replacements'},
+ {name:'apostrophes punctuation and capitalization',punctuation:true},
+ {name:'published alternate resets to deterministic first answer',alternate:true},
+ {name:'unrelated modified text restored',unrelated:true},
+ {name:'multiple modified tokens in one sentence',multiple:true},
+ {name:'all editable tokens wrong without modified flags',allWrong:true},
+ {name:'modified flags cleared after reset',wrong:true,clearModified:true},
+ {name:'stale modified flags on original text',staleFlags:true},
+ {name:'ordinary sentence without answer targets resets',extraSentence:true,extraWrong:true},
+ {name:'missing original QTI text refuses without mutation',missingOriginal:true,refusal:true},
+ {name:'incomplete trusted original inventory refuses before reset',incompleteOriginals:true,failure:true,wrong:true},
+ {name:'reset failure prevents every correction',unrelated:true,resetFail:true,failure:true,reason:'COMMITTED_TEXT_MISMATCH'},
+ {name:'already correct answer reset failure blocks correction',correct:true,resetFail:true,failure:true,reason:'COMMITTED_TEXT_MISMATCH'},
+ {name:'delayed popup and delayed commit',popupDelay:550,commitDelay:650},
+ {name:'DOM rerender on open and commit'},
+ {name:'missing QTI refuses without mutation',missingQti:true,refusal:true},
+ {name:'ambiguous QTI refuses without mutation',ambiguous:true,refusal:true},
+ {name:'multi-answer declaration unsupported',multiAnswer:true,refusal:true},
+ {name:'missing last token refuses before first edit',missingToken:true,refusal:true},
+ {name:'target disappears after QTI',lateMissing:true,failure:true},
+ {name:'missing OK control',missingOk:true,failure:true,reason:'EDITOR_CONTROLS_MISSING'},
+ {name:'popup closes without saving',noSave:true,failure:true,reason:'COMMITTED_TEXT_MISMATCH'},
+ {name:'popup remains open after saving',popupStays:true,failure:true,reason:'CONFIRMATION_TIMEOUT'},
+ {name:'popup opening timeout',noPopup:true,failure:true,reason:'POPUP_OPEN_FAILED'},
+ {name:'popup associated with wrong token',wrongOwner:true,failure:true,reason:'POPUP_TARGET_AMBIGUOUS'},
+ {name:'input value rejected',inputFailure:true,failure:true,reason:'INPUT_EVENT_FAILED'},
+ {name:'rerender during input invalidates editor',inputRerender:true,failure:true,reason:'INPUT_EVENT_FAILED'},
+ {name:'unrelated token changed during commit',unrelatedChange:true,failure:true,reason:'CORRECTION_POSITION_AUDIT_FAILED'},
+ {name:'later confirmation fails after partial completion',secondMissingOk:true,failure:true,reason:'EDITOR_CONTROLS_MISSING'},
+ {name:'forged duplicate mapping',forged:true,failure:true}
+];
+for(config of scenarios){
+ fixture=makeCorrectionFixture(config);values=fixture.groups.flat().map(t=>typeof t==='string'?t:t.from);modified=new Set();
+ originalText=values.slice();
+ for(const [i,edit] of fixture.edits.entries()){
+  if(config.correct||(config.mixed&&i%2===0))values[edit.tokenIndex]=edit.to;
+  if(config.wrong)values[edit.tokenIndex]='WRONG';if(config.markModified)modified.add(edit.tokenIndex);
+ }
+ if(config.alternate)values[fixture.edits[3].tokenIndex]=fixture.edits[3].alternatives[1];
+ if(config.unrelated){values[0]='User value';modified.add(0);}
+ if(config.multiple){values[0]='Changed';values[1]='Changed';values[2]=fixture.edits[0].to;modified=new Set([0,1,2]);}
+ if(config.allWrong)values=values.map(()=>'?');
+ if(config.staleFlags)modified=new Set(values.map((_,i)=>i));
+ if(config.extraWrong)values[values.length-1]='Changed';
+ opens=commits=inputs=changes=0;log=[];correcting=false;openIndex=null;render();
+ document.querySelector('script[type="text/plain"]').src='/cdn_proxy/correction/data.js?case='+sequence++;
+ window.fetch=async()=>({ok:true,headers:{get:()=>null},text:async()=>fixture.source});
+ const before=values.slice();
+ try{
+  const scan=await request('SPARK_SCAN');assert(scan.questions.length===1&&scan.questions[0].kind==='textCorrection','detection');
+  const mapper=SparkQTI.fromDataJs;
+  if(config.incompleteOriginals)SparkQTI.fromDataJs=(...args)=>{const r=mapper(...args);r.answers[0].originals.pop();return r;};
+  const qti=await request('SPARK_QTI',{ids:['q1']});SparkQTI.fromDataJs=mapper;
+  if(config.refusal){assert(qti.answers.length===0,'unsupported QTI accepted');assert(opens===0&&JSON.stringify(values)===JSON.stringify(before),'refusal mutated');}
+  else{
+   assert(qti.answers[0]?.corrections.length===5,'complete trusted mapping missing: '+JSON.stringify(qti));
+   const answer=qti.answers[0];
+   assert(answer.corrections.every((e,i)=>e.sentence===fixture.edits[i].sentence&&e.sentenceTokenIndex===fixture.edits[i].sentenceTokenIndex),'sentence/token mapping');
+   if(config.lateMissing)area.querySelector('.ki24_view:last-child .input-text:last-of-type').remove();
+   if(config.forged)answer.corrections[4].tokenIndex=answer.corrections[0].tokenIndex;
+   const result=(await request('SPARK_APPLY',{answers:[answer]}))[0];
+   if(config.failure){
+    assert(result.status!=='filled','partial state reported complete');
+    if(config.reason){assert(result.reason===config.reason,'unexpected failure '+JSON.stringify(result));assert(result.sentence>=1&&result.tokenIndex>=1&&result.expected,'failure lacks target diagnostics');}
+    if(config.lateMissing||config.forged)assert(opens===0,'incomplete preflight mutated');
+    if(config.incompleteOriginals)assert(opens===0&&JSON.stringify(values)===JSON.stringify(before),'missing original caused mutation');
+    if(config.resetFail)assert(result.phase==='reset'&&log.every(e=>e.phase==='reset')&&commits===0,'correction ran after failed reset');
+    if(config.secondMissingOk)assert(commits===1,'expected one partial commit');
+   }else{
+    assert(result.status==='filled','commit failed '+JSON.stringify(result));
+    const final=[...area.querySelectorAll('span.input-text')].map(t=>t.textContent);
+    const expected=originalText.slice();for(const edit of answer.corrections)expected[edit.tokenIndex]=edit.to;
+    assert(JSON.stringify(final)===JSON.stringify(expected),'complete exercise differs');
+    assert(!area.querySelector('.tc_popup'),'popup left open');
+    const resets=before.filter((value,i)=>value!==originalText[i]).length,needed=resets+answer.corrections.length;
+    assert(opens===needed&&commits===needed,'missing reset/correction or unconfirmed commit');assert(inputs===needed&&changes===needed,'events');
+    assert(log.slice(0,resets).every(e=>e.phase==='reset')&&log.slice(resets).every(e=>e.phase==='correct'),'reset barrier');
+    const previous=opens;log=[];correcting=false;await request('SPARK_SCAN');const againQti=await request('SPARK_QTI',{ids:['q1']});
+    const again=(await request('SPARK_APPLY',{answers:againQti.answers}))[0];
+    assert(again.status==='filled'&&opens===previous+10,'repeated Solve skipped reset or correction');
+    assert(log.slice(0,5).every(e=>e.phase==='reset')&&log.slice(5).every(e=>e.phase==='correct'),'repeated reset barrier');
+    assert(JSON.stringify(values)===JSON.stringify(expected),'repeated final result differs');
+   }
+  }
+  cases.push(config.name);
+ }catch(error){failed.push({name:config.name,error:String(error.message)});}
+ timers.forEach(clearTimeout);timers=[];
+}
+document.body.append(Object.assign(document.createElement('pre'),{id:'test-result',textContent:JSON.stringify({passed:cases.length,cases,failed})}));
+})().catch(error=>document.body.append(Object.assign(document.createElement('pre'),{id:'test-error',textContent:error.stack||String(error)})));
+</script></body></html>

@@ -7,7 +7,7 @@
     openrouter: {label:'OpenRouter',endpoint:'https://openrouter.ai/api/v1/chat/completions',model:'openai/gpt-4o-mini',responseFormat:'json_object'},
     groq: {label:'Groq',endpoint:'https://api.groq.com/openai/v1/chat/completions',model:'llama-3.3-70b-versatile',responseFormat:'json_object'},
     deepseek: {label:'DeepSeek',endpoint:'https://api.deepseek.com/chat/completions',model:'deepseek-chat',responseFormat:'json_object'},
-    gemini: {label:'Google Gemini (OpenAI-compatible)',endpoint:'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',model:'gemini-2.5-flash',responseFormat:'json_object'},
+    gemini: {label:'Google Gemini (OpenAI-compatible)',endpoint:'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',model:'gemini-3.5-flash-lite',responseFormat:'json_object'},
     ollama: {label:'Ollama (máy tính)',endpoint:'http://localhost:11434/v1/chat/completions',model:'llama3.2',responseFormat:'prompt_only'},
     custom: {label:'Tùy chỉnh (OpenAI-compatible)',endpoint:'',model:'',responseFormat:'prompt_only'}
   });
@@ -73,6 +73,46 @@
       throw new Error(`“${p.name}”: chưa nhập API key.`);
     }
     return p;
+  }
+  function writingConfigError(code,message) {
+    const error=new Error(code+': '+message);error.code=code;return error;
+  }
+  function configuredGemini(settings) {
+    const candidates=settings.profiles.filter(p=>p.provider==='gemini'&&p.apiKey);
+    return candidates.find(p=>p.id===settings.activeProfileId)||(candidates.length===1?candidates[0]:null);
+  }
+  function resolveWritingProfile(storage={}, {video=false}={}) {
+    const settings=normalizeSettings(storage);
+    if(video) {
+      const profile=configuredGemini(settings);
+      if(!profile) {
+        const ambiguous=settings.profiles.filter(p=>p.provider==='gemini'&&p.apiKey).length>1;
+        throw writingConfigError(ambiguous?'AI_PROFILE_AMBIGUOUS':'AI_KEY_MISSING',ambiguous?'Chọn một Gemini provider trong Providers.':'Thiếu Gemini API key. Mở Providers để cấu hình.');
+      }
+      if(!/^gemini-(?:2\.5|3(?:\.\d+)?|4)(?:[.-]|$)/i.test(profile.model))throw writingConfigError('AI_MODEL_INVALID','Model Gemini này chưa được xác nhận hỗ trợ video. Chọn model hỗ trợ video trong Providers.');
+      return profile;
+    }
+    const profiles=Array.isArray(storage.aiProfiles)||String(storage.apiKey||'').trim()?settings.profiles:[];
+    const explicitId=String(storage.activeProfileId||'');
+    let profile;
+    if(explicitId) {
+      profile=profiles.find(p=>p.id===explicitId);
+      if(!profile)throw writingConfigError('AI_PROFILE_NOT_FOUND','Không tìm thấy profile đã chọn trong Providers.');
+    } else {
+      if(!profiles.length)throw writingConfigError('AI_NOT_CONFIGURED','Chưa có cấu hình AI trong Providers.');
+      profile=configuredGemini(settings);
+      if(!profile) {
+        const configured=profiles.filter(p=>p.apiKey||p.provider==='ollama'||/^http:\/\/(?:localhost|127\.0\.0\.1)(?::|\/)/.test(p.endpoint));
+        if(configured.length===1)profile=configured[0];
+        else if(profiles.length===1)profile=profiles[0];
+        else throw writingConfigError(configured.length?'AI_PROFILE_AMBIGUOUS':'AI_KEY_MISSING',configured.length?'Chọn profile AI trong Providers.':'Các profile chưa có API key.');
+      }
+    }
+    if(!profile.model||profile.model.length>150||/[\u0000-\u001f\u007f]/.test(profile.model))throw writingConfigError('AI_MODEL_INVALID','Model của profile đã chọn không hợp lệ.');
+    let endpoint;
+    try {endpoint=validateEndpoint(profile.endpoint);} catch {throw writingConfigError('AI_ENDPOINT_INVALID','Endpoint của profile đã chọn không hợp lệ.');}
+    if(!profile.apiKey&&profile.provider!=='ollama'&&!['localhost','127.0.0.1'].includes(endpoint.hostname))throw writingConfigError('AI_KEY_MISSING','Profile đã chọn chưa có API key.');
+    return validateProfile(profile);
   }
   function selectedProfiles(settings) {
     if(settings.aiMode==='offline')return [];
@@ -155,5 +195,5 @@
     return {answers:all,mode:'compare',warning:failures.length?`${failures.length} cấu hình không phản hồi: ${failures.map(f=>f.name).join(', ')}.`:''};
   }
   root.SparkProviders={PRESETS,FORMATS,AI_MODES,MAX_PROFILES,SCHEMA,newProfile,sanitizeProfile,normalizeSettings,
-    validateEndpoint,originPattern,validateProfile,selectedProfiles,requestBody,parseContent,normalizeAnswers,mergeComparison};
+    validateEndpoint,originPattern,validateProfile,resolveWritingProfile,selectedProfiles,requestBody,parseContent,normalizeAnswers,mergeComparison};
 })(typeof self!=='undefined'?self:globalThis);

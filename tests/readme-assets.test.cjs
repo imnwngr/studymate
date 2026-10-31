@@ -17,6 +17,6 @@ test('README images, navigation and relative documentation links resolve in both
 test('visual asset provenance distinguishes actual fixture captures from illustrations and live testing',()=>{
  const s=read('docs/images/README.md');assert.match(s,/not screenshots/);assert.match(s,/not installed-extension or authenticated Spark screenshots/);assert.match(s,/mocked Chrome APIs/);assert.match(s,/no recordings/);for(const f of ['README.md','README.vi.md']){const s=read(f);for(const name of ['Ventrix','Chainsaw Editorial','Cognify','InsightOS','Checkbox','Linking Lines'])assert.ok(s.includes(name));}
 });
-test('documentation keeps manifest version 0.8.0 and does not claim final linking verification',()=>{
- assert.equal(JSON.parse(read('manifest.json')).version,'0.8.0');assert.match(read('README.md'),/exact final graph unverified/);assert.match(read('README.md'),/Checkbox popup validation can reject/);
+test('documentation keeps manifest version 0.8.1 and does not claim final linking verification',()=>{
+ assert.equal(JSON.parse(read('manifest.json')).version,'0.8.1');assert.match(read('README.md'),/exact final graph unverified/);assert.match(read('README.md'),/Checkbox popup validation can reject/);
 });

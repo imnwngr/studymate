@@ -11,8 +11,9 @@ Current <span class="input-text" data-model-id="105">qualifications</span>: Stud
 <script>window.chrome={runtime:{onMessage:{addListener(fn){window.__listener=fn;}}}};</script>
 <script src="../qti.js"></script>
 <script>
-const corrections=[{from:'Title',to:'Surname',tokenIndex:0},{from:'Occupation',to:'Date',tokenIndex:1},{from:'Nationality',to:'Gender',tokenIndex:2},{from:'Language',to:'Country',tokenIndex:3},{from:'qualifications',to:'occupation',tokenIndex:4}];
-window.SparkQTI.fromDataJs=()=>({reason:'complete',answers:[{id:'q1',source:'qti',confidence:'high',answer:corrections.map(x=>x.from+' → '+x.to).join(' ; '),corrections}]});
+window.mockNoOK=new URLSearchParams(location.search).has('missing-ok')||window.mockNoOK;
+const corrections=[{from:'Title',to:'Surname',tokenIndex:0},{from:'Occupation',to:'Date',tokenIndex:1},{from:'Nationality',to:'Gender',tokenIndex:2},{from:'Language',to:'Country',tokenIndex:3},{from:'qualifications',to:'occupation',tokenIndex:4}].map(e=>({...e,anchorVerified:true,sentence:0,sentenceTokenIndex:e.tokenIndex}));
+window.SparkQTI.fromDataJs=()=>({reason:'complete',answers:[{id:'q1',source:'qti',confidence:'high',answer:corrections.map(x=>x.from+' → '+x.to).join(' ; '),corrections,originals:corrections.map(e=>({text:e.from,tokenIndex:e.tokenIndex,sentence:0,sentenceTokenIndex:e.tokenIndex}))}]});
 window.fetch=async()=>({ok:true,headers:{get(){return '3';}},text:async()=>"ok!"});
 const marker=document.createElement('script');marker.type='text/plain';marker.src='/cdn_proxy/fixture/data.js';document.head.append(marker);
 const widget=document.querySelector('.ki24_view');

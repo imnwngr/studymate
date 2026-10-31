@@ -1,0 +1,291 @@
+<!doctype html><html><head><meta charset="utf-8"><style>[hidden],.activity--hidden{display:none!important}[role=radio],[role=checkbox]{min-width:40px;min-height:26px}button,input,select{min-height:24px}</style></head><body>
+<h1 class="learningObject__title">Synthetic | Review</h1><div id="screens"></div><div id="activity_controls"></div>
+<script>window.chrome={runtime:{onMessage:{addListener(fn){window.request=(type,extra={})=>new Promise(resolve=>fn({type,...extra},null,r=>{if(!r.ok)throw Error(r.error);resolve(r.result);}));}}}};</script>
+<script src="/tests/review-fixture.js"></script><script type="text/plain" src="/cdn_proxy/review/data.js"></script>
+<script src="/qti.js"></script><script src="/core/site-registry.js"></script><script src="/solvers/interactions.js"></script><script src="/solvers/sequence.js"></script><script src="/solvers/text-correction.js"></script><script src="/answer-sources/embedded-qti.js"></script><script src="/core/runtime.js"></script><script src="/adapters/ngl.js"></script><script src="/adapters/generic.js"></script><script src="/content.js"></script>
+<script>
+(async()=>{
+const cases=[],failed=[],screens=document.querySelector('#screens'),toolbar=document.querySelector('#activity_controls');
+let fixture,config,model,active,dropdown=null,resetCount,solveCount,solveStarted,log,timers=[],run=0,errors=[],manual=false,pendingReset=false,checkboxClicks;
+const pause=ms=>new Promise(resolve=>timers.push(setTimeout(resolve,ms)));
+const assert=(v,m)=>{if(!v)throw Error(m);};window.addEventListener('error',event=>errors.push(event.message));
+const emptyValue=g=>g.kind==='choice'||g.kind==='checkbox'?[]:g.kind==='text'?'':null;
+const empty=()=>fixture.groups.every((g,i)=>model[i].every(v=>Array.isArray(v)?v.length===0:g.kind==='text'?v==='':v===null));
+const correct=()=>fixture.groups.every((g,i)=>g.questions.every((q,j)=>JSON.stringify(model[i][j])===JSON.stringify(q.answer)));
+function render(){
+ screens.replaceChildren();
+ fixture.groups.forEach((group,g)=>{
+  const root=document.createElement('div');root.id='content_wrap_'+g;root.className='content-wrap'+(g!==active?' activity--hidden':'');
+  const widget=document.createElement('section');widget.className='interaction '+({choice:'is-radiobutton',checkbox:'is-checkbox',text:'ic-text-gap',dropdown:'is-dropdown'}[group.kind]);
+  group.questions.forEach((q,j)=>{
+   const block=document.createElement('div');block.className='contentblock';
+   if(group.kind==='choice'||group.kind==='checkbox')q.options.forEach((label,c)=>{
+    const node=document.createElement('div'),selected=model[g][j].includes(q.ids[c])||Boolean(config.ambiguousRadio&&g===5&&j===0&&c<2);
+    const type=group.kind==='choice'?'radio':'checkbox';node.id='input-'+type+'-s'+g+'-c'+j+'-'+c;
+    node.className='input-'+type+(selected?' input-'+type+'-checked':'');node.setAttribute('role',type);node.setAttribute('aria-checked',String(config.ambiguousCheckbox&&type==='checkbox'&&selected?false:selected));
+    node.dataset.group=g;node.dataset.question=j;node.dataset.choice=q.ids[c];
+    node.innerHTML='<span class="is-'+(type==='radio'?'radiobutton':'checkbox')+'__icon">.</span><span class="is-'+(type==='radio'?'radiobutton':'checkbox')+'-choice-text">'+label+'</span>';block.append(node);
+   });
+   else if(group.kind==='text'){
+    const input=document.createElement('input');input.type='text';input.value=model[g][j];input.dataset.group=g;input.dataset.question=j;block.append(input);
+   }else if(config.nativeDropdown){
+    const select=document.createElement('select');select.dataset.group=g;select.dataset.question=j;
+    if(!config.noBlank)select.append(new Option('',''));
+    q.options.forEach((label,c)=>select.append(new Option(label,config.duplicateValues?'same':String(c))));
+    select.selectedIndex=model[g][j]===null?(config.noBlank?-1:0):q.options.indexOf(model[g][j])+(config.noBlank?0:1);block.append(select);
+   }else{
+    const wrap=document.createElement('div');wrap.className=config.standaloneDropdown?'dropdown-host':'wrapper-dropdown';wrap.dataset.group=g;wrap.dataset.question=j;
+    const button=document.createElement('button');button.className='drop-label listbox__label';button.setAttribute('role','combobox');button.setAttribute('aria-expanded',String(Boolean(dropdown&&dropdown[0]===g&&dropdown[1]===j)));
+    button.innerHTML=model[g][j]===null?'<span class="listbox__placeholder">Select</span>':config.dropdownMismatch?'stale label':model[g][j];wrap.append(button);
+    const popup=document.createElement('div');popup.className='listbox__popup';popup.hidden=!(dropdown&&dropdown[0]===g&&dropdown[1]===j);
+    if(config.standaloneDropdown){popup.id='generated-'+run+'-'+g+'-'+j;button.setAttribute('aria-controls',popup.id);}
+    q.options.forEach((label,c)=>{const option=document.createElement('li');option.className='listbox__choice'+(model[g][j]===label?' listbox__choice--selected':'');option.setAttribute('role','option');option.setAttribute('value','0');option.textContent=label;option.dataset.value=label;
+      option.setAttribute('aria-selected',String(model[g][j]===label));popup.append(option);});wrap.append(popup);block.append(wrap);
+   }
+   widget.append(block);
+  });if(!(config.missingWidget&&g===7))root.append(widget);screens.append(root);
+ });
+ if(config.reverseDOM)screens.replaceChildren(...[...screens.children].reverse());
+ if(config.singleWrapper){const roots=[...screens.children],first=roots[0];first.classList.remove('activity--hidden');
+  roots.forEach((root,i)=>{const widget=root.querySelector('.interaction');widget.hidden=i!==active;if(i){first.append(widget);root.remove();}});}
+ toolbar.replaceChildren();
+ const add=(event,text,disabled=false)=>{const b=document.createElement('button');b.dataset.event=event;b.textContent=text;b.disabled=disabled;toolbar.append(b);
+  if(event==='reset_all'&&config.delayedGlobal&&active===7){b.hidden=true;timers.push(setTimeout(()=>{if(b.isConnected)b.hidden=false;},350));}};
+ if(!config.noReset&&(!config.lastScreenGlobalReset||active===7)&&(!config.firstScreenGlobalReset||active===0)&&config.sectionMissingAt!==active)add(config.sectionReset?'reset':'reset_all','Reset');
+ if(config.stepNavigation){add('previous','Previous',active===0);add('forward','Next',active===7);}else for(let i=0;i<8;i++){const b=document.createElement('button');b.dataset.interaction=i;b.textContent='Section '+i;toolbar.append(b);}
+}
+function beginSolve(){assert(!pendingReset,'answer sent before native reset committed');if(!solveStarted){if(config.lateGoFirst&&resetCount)assert(log.includes('native-reset-goFirst'),'answer before native goFirst committed');solveStarted=true;log.push('solve-start');}solveCount++;}
+function dialog(all){
+ const node=document.createElement('div');node.className=all?'dialog-really-reload-all':'dialog-really-reload';
+ if(!config.missingConfirmation)node.innerHTML='<button data-button="ok">OK</button>';document.body.append(node);
+ node.addEventListener('click',e=>{if(!e.target.matches('[data-button=ok]'))return;
+  resetCount++;log.push('reset-confirm');
+  if(config.rejectConfirmation)return;
+  if(config.cancelConfirmation){node.remove();return;}
+  pendingReset=true;if(config.closeBeforeReset)node.remove();
+  const change=()=>{
+   fixture.groups.forEach((group,g)=>{if(!all&&g!==active&&!config.sectionClearsAll)return;
+    if(config.visibleOnlyReset&&g!==active)return;
+    if(config.radioResetFailure&&g===0)return;if(config.textResetFailure&&g===3)return;
+    model[g]=group.questions.map(()=>emptyValue(group));
+   });if(all&&!config.lateGoFirst)active=0;node.remove();dropdown=null;pendingReset=false;log.push('reset-committed');render();
+   if(all&&config.lateGoFirst)timers.push(setTimeout(()=>{active=0;log.push('native-reset-goFirst');render();},200));
+  };
+  if(config.delayedReset)timers.push(setTimeout(change,350));else change();
+ });
+}
+toolbar.addEventListener('click',e=>{
+ const button=e.target.closest('button');if(!button)return;
+ if(button.dataset.interaction!==undefined){const target=Number(button.dataset.interaction);if(config.navigationFailure&&target===2||config.afterCheckboxFailure&&solveStarted&&target===5)return;const change=()=>{active=target;log.push('navigate:'+active);dropdown=config.preopenDropdown&&solveStarted&&target===6?[6,0]:null;render();if(config.duplicateNavigation&&solveStarted&&target===5)queueMicrotask(()=>{active=6;log.push('duplicate-navigation:6');render();});};if(config.delayedNavigation)timers.push(setTimeout(change,150));else change();return;}
+ const event=button.dataset.event;if(event==='forward'||event==='previous'){active+=event==='forward'?1:-1;log.push('navigate:'+active);dropdown=null;render();return;}
+ if(event==='reset_all'||event==='reset'){log.push('reset-request');if(config.delayedConfirmation)timers.push(setTimeout(()=>dialog(event==='reset_all'),500));else dialog(event==='reset_all');}
+});
+screens.addEventListener('click',e=>{
+ const choice=e.target.closest('[role=radio],[role=checkbox]');
+ if(choice){const g=Number(choice.dataset.group),j=Number(choice.dataset.question),id=choice.dataset.choice;
+  if(!manual)log.push('answer:'+g+':'+j+':'+id);
+  assert(g===active,'clicked hidden group');if(!e.target.matches(fixture.groups[g].kind==='checkbox'?'.is-checkbox__icon':'.is-radiobutton__icon'))return;
+  if(!manual)beginSolve();if(config.lastFailure&&g===7)return;
+  const isCheckbox=fixture.groups[g].kind==='checkbox',isManual=manual;
+  if(config.suppressGroup===g)return;
+  if(config.paintOnlyGroup===g){choice.classList.add('input-'+(isCheckbox?'checkbox':'radio')+'-checked');choice.setAttribute('aria-checked','true');return;}
+  if(isCheckbox&&!isManual){checkboxClicks.set(id,(checkboxClicks.get(id)||0)+1);assert(checkboxClicks.get(id)===1,'duplicate solver click while waiting: '+id);}
+  const change=()=>{
+   if(fixture.groups[g].kind==='choice')model[g][j]=config.radioToggle&&model[g][j].includes(id)?[]:[id];else model[g][j]=model[g][j].includes(id)?model[g][j].filter(v=>v!==id):[...model[g][j],id].sort();
+   if(config.corruptEarlier&&g===7&&j===4)model[0][0]=[];
+   if(config.backwardAfterCheckbox&&g===4&&JSON.stringify(model[4][0])===JSON.stringify(fixture.groups[4].questions[0].answer)){active=0;log.push('unexpected-backward:4:0');}
+   render();if(config.staleCheckbox&&g===4)screens.querySelector('#content_wrap_4 .interaction').remove();log.push('committed:'+id);
+  };
+  if(isCheckbox&&config.checkboxDelay)timers.push(setTimeout(change,config.checkboxDelay));else change();return;
+ }
+ const wrap=e.target.closest('.wrapper-dropdown,.dropdown-host');if(!wrap)return;const g=Number(wrap.dataset.group),j=Number(wrap.dataset.question);
+ if(e.target.closest('button[role=combobox]')){dropdown=[g,j];render();return;}
+ const option=e.target.closest('[role=option]');if(option){beginSolve();log.push('mutation:'+g+':'+j);if(config.suppressGroup===g)return;model[g][j]=option.dataset.value;dropdown=null;render();}
+});
+screens.addEventListener('input',e=>{
+ const input=e.target;if(!input.matches('input[type=text]'))return;const g=Number(input.dataset.group),j=Number(input.dataset.question);assert(g===active,'typed into hidden section');beginSolve();log.push('mutation:'+g+':'+j);model[g][j]=input.value;render();
+});
+screens.addEventListener('change',e=>{const select=e.target;if(!select.matches('select'))return;beginSolve();log.push('mutation:'+select.dataset.group+':'+select.dataset.question);model[Number(select.dataset.group)][Number(select.dataset.question)]=select.selectedOptions[0].textContent;render();});
+const scenarios=[
+ {name:'all empty',initial:'empty'}, {name:'all correct',initial:'correct'}, {name:'all incorrect',initial:'wrong'},
+ {name:'mixed correct and incorrect',initial:'mixed'}, {name:'only one section visible',initial:'wrong'},
+ {name:'hidden groups contain selections',initial:'correct'}, {name:'repeated Solve',initial:'correct'},
+ {name:'section reset control is unused',initial:'wrong',sectionReset:true}, {name:'previous and forward navigation',initial:'mixed',stepNavigation:true},
+ {name:'last-screen global reset is unused on correct state',initial:'correct',lastScreenGlobalReset:true,startAtZero:true},
+ {name:'late global reset control is unused',initial:'wrong',lastScreenGlobalReset:true,startAtZero:true,delayedGlobal:true},
+ {name:'missing section reset does not block reconciliation',initial:'wrong',sectionReset:true,sectionMissingAt:3},
+ {name:'first-screen global reset is unused',initial:'wrong',firstScreenGlobalReset:true},
+ {name:'rerender every answer',initial:'wrong'}, {name:'native blank dropdown',initial:'empty',nativeDropdown:true},
+ {name:'duplicate labels with canonical radio IDs',initial:'wrong',duplicateLabels:true},
+ {name:'Inspector checkbox sequence and delayed commit after action-after',initial:'empty',inspectorSequence:true,checkboxDelay:650},
+ {name:'delayed reset confirmation is unused',initial:'correct',delayedConfirmation:true},
+ {name:'delayed reset is unused',initial:'empty',delayedReset:true,closeBeforeReset:true},
+ {name:'rejecting reset is irrelevant to reconciliation',initial:'wrong',rejectConfirmation:true},
+ {name:'cancelled reset is irrelevant to reconciliation',initial:'wrong',cancelConfirmation:true},
+ {name:'cancelled reset on empty state is unused',initial:'empty',cancelConfirmation:true},
+ {name:'checkbox transition times out without duplicate click',initial:'empty',checkboxDelay:2800,failure:true,failedGroup:4},
+ {name:'checkbox class and ARIA disagreement refuses success',initial:'empty',ambiguousCheckbox:true,failure:true,failedGroup:4},
+ {name:'reconciliation does not schedule native goFirst',initial:'wrong',referenceCheckbox:true,lateGoFirst:true,checkboxDelay:650},
+ {name:'Screen 1 to 5 then unexpected Screen 1 stops without recovery',initial:'empty',referenceCheckbox:true,backwardAfterCheckbox:true,failure:true,failedGroup:4,expectedReason:'UNEXPECTED_BACKWARD_NAVIGATION'},
+ {name:'navigation fails immediately after Checkbox completes',initial:'empty',afterCheckboxFailure:true,failure:true,failedGroup:5,expectedReason:'NAVIGATION_FAILED'},
+ {name:'duplicate navigation cannot silently skip Screen 6',initial:'empty',duplicateNavigation:true,failure:true,failedGroup:5,expectedReason:'ACTIVE_SCREEN_MISMATCH'},
+ {name:'one coordinator rejects concurrent Solve',initial:'correct',concurrent:true},
+ {name:'delayed navigation commits once per section',initial:'wrong',delayedNavigation:true},
+ {name:'canonical sections survive reversed DOM order',initial:'wrong',reverseDOM:true},
+ {name:'partially correct reference Checkbox preserves correct choices',initial:'empty',referenceCheckbox:true,partialCheckbox:true},
+ {name:'reference screens 5 through 8 exact QTI sets',initial:'wrong',referenceMapping:true,lastScreenGlobalReset:true,startAtZero:true,checkboxDelay:150},
+ {name:'state-based mixed Review without global reset',initial:'mixed',referenceMapping:true,noReset:true,stateBased:true,partialCheckbox:true,missingSome:true},
+ {name:'state-based fully correct Review needs no actions',initial:'correct',referenceMapping:true,noReset:true,stateBased:true},
+ {name:'state-based native Dropdown without blank option',initial:'wrong',referenceMapping:true,noReset:true,stateBased:true,nativeDropdown:true,noBlank:true},
+ {name:'already-open Dropdown is replaced without closing it first',initial:'wrong',referenceMapping:true,noReset:true,preopenDropdown:true},
+ {name:'standalone combobox is its own label',initial:'mixed',referenceMapping:true,noReset:true,standaloneDropdown:true},
+ {name:'native dropdown duplicate raw values',initial:'wrong',referenceMapping:true,noReset:true,nativeDropdown:true,duplicateValues:true},
+ {name:'recorded radio select deselect and replace',initial:'empty',referenceMapping:true,noReset:true,radioToggle:true,manualRadio:true},
+ {name:'delayed incorrect Checkbox is deselected once',initial:'wrong',referenceMapping:true,noReset:true,checkboxDelay:650},
+ {name:'ambiguous radio refuses before mutation',initial:'empty',ambiguousRadio:true,failure:true,failedGroup:5,noMutation:true,expectedReason:'REVIEW_STATE_AMBIGUOUS'},
+ {name:'Dropdown stale label fails verification',initial:'empty',dropdownMismatch:true,failure:true,failedGroup:6,expectNoAdvance:true},
+ {name:'unreadable Dropdown identifies question without exposing answer',initial:'wrong',dropdownMismatch:true,failure:true,failedGroup:6,noMutation:true,expectedReason:'SELECTION_UNREADABLE',stateDiagnostic:true},
+ ...['checkbox-one','checkbox-extra','radio-six-one','radio-six-three','dropdown-mixed','dropdown-correct','radio-eight-one','radio-eight-wrong'].map(partialScenario=>({name:'partial '+partialScenario,initial:'correct',referenceMapping:true,noReset:true,partialScenario})),
+ {name:'solver acts on first Radio then skips remaining questions',initial:'correct',referenceMapping:true,noReset:true,partialScenario:'radio-six-empty',fakeAfterFirst:true,failure:true,failedGroup:5,expectNoAdvance:true},
+ {name:'non-replaceable response uses scoped native reset',initial:'wrong',referenceMapping:true,sectionReset:true,recovery:'section'},
+ {name:'non-replaceable response uses Reset All and restarts',initial:'wrong',referenceMapping:true,lastScreenGlobalReset:true,recovery:'all'},
+ {name:'cancelled scoped recovery stops without further answers',initial:'wrong',referenceMapping:true,sectionReset:true,recovery:'section',cancelConfirmation:true,cancelledRecovery:true,failure:true,failedGroup:4,expectNoAdvance:true},
+ {name:'scoped reset changing other sections fails closed',initial:'wrong',referenceMapping:true,sectionReset:true,recovery:'section',sectionClearsAll:true,failure:true,failedGroup:4,expectNoAdvance:true},
+ {name:'cancelled global recovery stops without restarting',initial:'wrong',referenceMapping:true,lastScreenGlobalReset:true,recovery:'all',cancelConfirmation:true,cancelledRecovery:true,failure:true,failedGroup:0},
+ {name:'detached Checkbox interaction stops without navigation',initial:'empty',staleCheckbox:true,failure:true,failedGroup:4,expectedReason:'STALE_INTERACTION_ROOT'},
+ ...[4,5,6,7].map(g=>({name:'section '+g+' refuses ineffective answer actions',initial:'empty',suppressGroup:g,failure:true,failedGroup:g,expectNoAdvance:true})),
+ {name:'optimistic checkbox repaint is lost on navigation',initial:'empty',paintOnlyGroup:4,failure:true,failedGroup:4,expectNoAdvance:true},
+ ...[4,5,6,7].map(g=>({name:'section '+g+' false solver success without actions cannot advance',initial:'empty',fakeSuccessGroup:g,failure:true,failedGroup:g,expectNoAdvance:true,expectActionDiagnostics:true})),
+ {name:'legacy diagnostic flag cannot expose observed values',initial:'empty',diagnosticValues:true},
+ {name:'missing QTI last group',initial:'wrong',missingQti:true,refusal:true}, {name:'missing declaration last group',initial:'wrong',partialQti:true,refusal:true},
+ {name:'manifest missing',initial:'wrong',missingManifest:true,refusal:true},
+ {name:'unloaded last section refuses before mutation',initial:'wrong',missingWidget:true,refusal:true},
+ {name:'unsupported single-wrapper layout refuses partial Solve',initial:'wrong',singleWrapper:true,refusal:true},
+ {name:'radio reset failure does not block reconciliation',initial:'wrong',radioResetFailure:true},
+ {name:'hidden selections are reconciled without reset',initial:'wrong',visibleOnlyReset:true},
+ {name:'dropdown without blank state is replaceable',initial:'wrong',nativeDropdown:true,noBlank:true},
+ {name:'text reset failure does not block reconciliation',initial:'wrong',textResetFailure:true},
+ {name:'native reset control is not required',initial:'wrong',noReset:true},
+ {name:'reset confirmation is not required',initial:'wrong',missingConfirmation:true},
+ {name:'last group fails',initial:'empty',lastFailure:true,failure:true,failedGroup:7},
+ {name:'navigation blocked',initial:'wrong',navigationFailure:true,failure:true,noMutation:true},
+ {name:'earlier hidden result corrupted',initial:'wrong',corruptEarlier:true,failure:true,failedGroup:0}
+];
+const realSolvers=window.SparkSolvers;
+window.SparkSolvers={...realSolvers,
+ solve:(kind,port,answer)=>((config?.fakeSuccessGroup===active&&kind===fixture.groups[active].kind)||(config?.fakeAfterFirst&&active===5&&kind==='choice'&&answer.id!=='s5q0'))?Promise.resolve({status:'filled',detail:'injected false success'}):realSolvers.solve(kind,port,answer),
+ checkAndReconcile:(current,expected,capabilities,interaction)=>realSolvers.checkAndReconcile(current,expected,
+  config?.recovery&&active===4?{replace:false,scopedReset:config.recovery==='section',globalReset:config.recovery==='all'}:capabilities,interaction)};
+for(config of scenarios){
+ if(!config.failure&&!config.refusal)config.stateBased=true;
+ fixture=makeReviewFixture(config);active=config.startAtZero?0:4;dropdown=null;resetCount=solveCount=0;solveStarted=false;log=[];errors=[];pendingReset=false;checkboxClicks=new Map();
+ if(config.diagnosticValues)sessionStorage.setItem('studymate.reviewDiagnosticValues','true');else sessionStorage.removeItem('studymate.reviewDiagnosticValues');
+ model=fixture.groups.map((g,i)=>g.questions.map((q,j)=>config.initial==='empty'?emptyValue(g):config.initial==='correct'||config.initial==='mixed'&&(i+j)%2===0?JSON.parse(JSON.stringify(q.answer)):g.kind==='text'?'wrong':g.kind==='dropdown'?q.options.find(v=>v!==q.answer):[q.ids.find(v=>!q.answer.includes(v))]));
+ if(config.partialCheckbox)model[4][0]=['C0_0','C0_3'];
+ if(config.missingSome){model[0][1]=[];model[3][2]='';model[5][3]=[];model[6][1]=null;}
+ if(config.partialScenario){
+  if(config.partialScenario==='checkbox-one')model[4][0]=['C0_0'];
+  if(config.partialScenario==='checkbox-extra')model[4][0]=fixture.groups[4].questions[0].ids.slice();
+  if(config.partialScenario==='radio-six-one'||config.partialScenario==='radio-six-three'||config.partialScenario==='radio-six-empty'){
+   const keep=config.partialScenario==='radio-six-one'?1:config.partialScenario==='radio-six-three'?3:0;model[5]=model[5].map((v,i)=>i<keep?v:[]);
+  }
+  if(config.partialScenario==='dropdown-mixed'){model[6][2]=fixture.groups[6].questions[2].options.find(v=>v!==fixture.groups[6].questions[2].answer);model[6][3]=model[6][4]=null;}
+  if(config.partialScenario==='radio-eight-one')model[7]=model[7].map((v,i)=>i===0?v:[]);
+  if(config.partialScenario==='radio-eight-wrong')model[7]=fixture.groups[7].questions.map(q=>[q.ids.find(id=>!q.answer.includes(id))]);
+ }
+ render();document.querySelector('script[type="text/plain"]').src='/cdn_proxy/review/data.js?case='+run++;
+ window.fetch=async()=>({ok:true,headers:{get:()=>null},text:async()=>fixture.source});
+ try{
+  if(config.manualRadio){active=7;render();manual=true;
+   const click=id=>screens.querySelector('[data-group="7"][data-question="0"][data-choice="'+id+'"] .is-radiobutton__icon').click();
+   click('C0_0');assert(JSON.stringify(model[7][0])==='["C0_0"]','radio select');
+   click('C0_0');assert(model[7][0].length===0,'radio deselect');
+   click('C0_1');assert(JSON.stringify(model[7][0])==='["C0_1"]','radio replacement');manual=false;
+  }
+  if(config.inspectorSequence){
+   manual=true;
+   for(const [id,selected] of [['C0_1',true],['C0_4',true],['C0_3',true],['C0_3',false]]){
+    const before=model[4][0].includes(id),icon=()=>screens.querySelector('[data-group="4"][data-choice="'+id+'"] .is-checkbox__icon');
+    icon().dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));
+    screens.dispatchEvent(new CustomEvent('action-after',{bubbles:true}));
+    assert(model[4][0].includes(id)===before,'pointer/action-after changed state');
+    await pause(100);icon().click();assert(model[4][0].includes(id)===before,'dispatch mistaken for commit');
+    await pause(config.checkboxDelay+20);assert(model[4][0].includes(id)===selected,'manual toggle failed');
+   }
+   manual=false;assert(JSON.stringify(model[4][0])==='["C0_1","C0_4"]','Inspector sequence differs');
+  }
+  const before=JSON.stringify(model);
+  const scan=await request('SPARK_SCAN');assert(scan.questions[0]?.kind==='review','Review not detected');
+  const qti=await request('SPARK_QTI',{ids:['q1']});
+  if(config.refusal){assert(qti.answers.length===0&&resetCount===0&&solveCount===0&&JSON.stringify(model)===before,'partial preflight mutated');assert(qti.group===7||config.missingManifest||config.singleWrapper&&qti.group===0,'missing group diagnostic');}
+  else{
+   assert(qti.groupCount===8&&qti.responseCount===36,'not all eight groups mapped: '+JSON.stringify(qti));
+   if(config.referenceMapping){const groups=qti.answers[0].groups;
+    assert(JSON.stringify(groups[4].answers[0].selectedIds)==='["C0_0","C0_2","C0_3","C0_4","C0_5"]','reference Checkbox mapping');
+    assert(JSON.stringify(groups[5].answers.map(a=>a.selectedIds[0]))==='["C0_2","C1_0","C2_1","C3_1","C4_0"]','reference Radio 6 mapping');
+    assert(JSON.stringify(groups[6].answers.map(a=>a.answer))===JSON.stringify(['like','good',"'d like",'should',"'d prefer"]),'reference Dropdown mapping');
+    assert(JSON.stringify(groups[7].answers.map(a=>a.selectedIds[0]))==='["C0_1","C1_0","C2_2","C3_1","C4_2"]','reference Radio 8 mapping');}
+   const apply=()=>request('SPARK_APPLY',{answers:[{id:'q1',answer:qti.answers[0].answer}]});
+   const pending=apply();
+   if(config.concurrent){const blocked=(await apply())[0];assert(blocked.reason==='CONCURRENT_SOLVE_ATTEMPT','second coordinator not rejected');}
+   const result=(await pending)[0];
+   if(config.lastScreenGlobalReset&&!config.failure)assert(result.status==='filled'&&result.resetMechanism===(config.recovery==='all'?'reset_all':'none'),'section 0 rejected state reconciliation: '+JSON.stringify({reason:result.reason,cause:result.cause,phase:result.phase,group:result.group}));
+   if(config.stateBased){
+    assert(result.status==='filled'&&correct()&&active===7&&resetCount===(config.recovery?1:0),'state-based Review failed: '+JSON.stringify({reason:result.reason,group:result.group,detail:result.error||result.detail}));
+    assert(result.groupsVerified===8&&result.responsesVerified===36&&result.sectionResults.length===8,'incomplete state reconciliation coverage');
+    assert(result.sectionResults.every(s=>['AlreadyCorrect','Corrected'].includes(s.status)),'missing section outcome');
+    assert(result.sectionResults.every(s=>s.verifiedQuestions===s.expectedQuestions&&s.mappedControls===s.expectedQuestions&&
+      s.alreadyCorrect+s.corrected===s.expectedQuestions&&s.failed===0&&s.firstFailedQuestion===null),'incomplete per-question accounting');
+    const trace=result.reviewDiagnostics.events;
+    if(config.recovery){assert(result.events.some(e=>e.phase==='recovery-verified'&&e.scope===config.recovery),'reset recovery not verified');
+      if(config.recovery==='all')assert(result.events.filter(e=>e.phase==='solve-group'&&e.group===0).length===2,'global reset did not restart earlier sections');}
+    else assert(!trace.some(e=>e.stage==='RESET_START'),'unexpected global reset');
+    if(!config.recovery){assert(JSON.stringify(trace.filter(e=>e.stage==='SECTION_PASS').map(e=>e.section))==='[0,1,2,3,4,5,6,7]','sections not verified in order');
+    assert(JSON.stringify(trace.filter(e=>e.stage==='SECTION_SOLVER_PLANNED').map(e=>e.solver))==='["choice","choice","choice","text","checkbox","choice","dropdown","choice"]','wrong section solver mapping');}
+    assert(trace.filter(e=>e.stage==='SOLVER_DISPATCH').every(e=>trace.some(p=>p.stage==='SECTION_SOLVER_PLANNED'&&p.section===e.section&&p.solver===e.solver)),'solver dispatch mismatch');
+    const summary=trace.find(e=>e.stage==='RECONCILIATION_PLAN')?.currentState;assert(summary?.length,'state diagnostics missing');
+    assert(summary.every(v=>!Object.hasOwn(v,'actual')),'diagnostic value privacy mode incorrect');
+    assert(!trace.some(e=>e.phase==='solve'&&e.stage==='NAVIGATE_START'&&e.direction==='previous'),'backward Solve navigation');
+    const diagnostics=await request('SPARK_DIAGNOSTICS');assert(diagnostics.execution?.operationId===result.operationId&&diagnostics.execution.finished,'execution trace unavailable');
+    assert(!errors.length,'fixture recorded an invalid mutation: '+errors.join(','));
+    const firstState=JSON.parse(before);
+    fixture.groups.forEach((group,g)=>group.questions.forEach((q,j)=>{
+      if(!config.recovery&&JSON.stringify(firstState[g][j])===JSON.stringify(q.answer))assert(!log.some(v=>v.startsWith('answer:'+g+':'+j+':')||v==='mutation:'+g+':'+j),'already correct response changed: '+g+'/'+j);
+    }));
+    if(config.initial==='correct'&&!config.partialScenario)assert(solveCount===0,'correct exercise was rewritten');
+    if(config.partialScenario==='checkbox-one')assert(result.sectionResults[4].verifiedQuestions===1&&result.sectionResults[4].actionsCommitted===4,'Checkbox missing four selections');
+    if(config.partialScenario==='checkbox-extra')assert(result.sectionResults[4].verifiedQuestions===1&&result.sectionResults[4].actionsCommitted===2,'Checkbox extra two selections');
+    if(config.partialScenario==='radio-six-one')assert(result.sectionResults[5].verifiedQuestions===5&&result.sectionResults[5].alreadyCorrect===1&&result.sectionResults[5].corrected===4,'Radio 1+4 count');
+    if(config.partialScenario==='radio-six-three')assert(result.sectionResults[5].verifiedQuestions===5&&result.sectionResults[5].alreadyCorrect===3&&result.sectionResults[5].corrected===2,'Radio 3+2 count');
+    if(config.partialScenario==='dropdown-mixed')assert(result.sectionResults[6].verifiedQuestions===5&&result.sectionResults[6].alreadyCorrect===2&&result.sectionResults[6].corrected===3,'Dropdown 2+1+2 count');
+    if(config.partialScenario==='dropdown-mixed')assert(JSON.stringify(trace.filter(e=>e.stage==='QUESTION_CHECK'&&e.section===6).map(e=>e.classification))==='["Correct","Correct","Wrong","Empty","Empty"]','Dropdown question classifications');
+    if(config.partialScenario==='dropdown-correct')assert(result.sectionResults[6].verifiedQuestions===5&&result.sectionResults[6].alreadyCorrect===5&&result.sectionResults[6].actionsCommitted===0,'already-correct Dropdown count');
+    if(config.partialScenario==='radio-eight-one')assert(result.sectionResults[7].verifiedQuestions===5&&result.sectionResults[7].alreadyCorrect===1&&result.sectionResults[7].corrected===4,'Radio 1+4 count');
+    if(config.partialScenario==='radio-eight-wrong')assert(result.sectionResults[7].verifiedQuestions===5&&result.sectionResults[7].corrected===5,'Radio replacement count');
+    if(config.partialCheckbox)assert(!log.includes('answer:4:0:C0_0')&&!log.includes('answer:4:0:C0_3'),'correct Checkbox choices toggled');
+    const start=solveCount;solveStarted=false;checkboxClicks=new Map();const again=(await apply())[0];
+    assert(again.status==='filled'&&correct()&&resetCount===(config.recovery?1:0)&&solveCount===start,'repeated correct Solve made unnecessary mutations');
+    assert(again.sectionResults.every(s=>s.status==='AlreadyCorrect'&&s.actionsCommitted===0),'repeated section outcomes not already correct');
+   }else if(config.failure){
+    assert(result.status!=='filled','partial Review reported success');if(config.failedGroup!==undefined)assert(result.group===config.failedGroup,'wrong failed group '+JSON.stringify(result));
+    if(config.expectedReason)assert(result.reason===config.expectedReason,'failure not classified: '+JSON.stringify(result));
+    if(config.stateDiagnostic)assert(result.question===0&&result.stateDiagnostic?.qtiResponseResolved&&result.stateDiagnostic.expectedOptionResolved&&result.stateDiagnostic.comboboxMapped&&!result.stateDiagnostic.currentSelectionReadable&&result.stateDiagnostic.matchingOptions===1,'missing question-level diagnostic: '+JSON.stringify(result));
+    if(config.expectNoAdvance){assert(!result.events.some(e=>e.phase==='solve-group'&&e.group>config.failedGroup),'advanced to a later section after unanswered section');
+     if(config.expectActionDiagnostics)assert(result.reviewDiagnostics?.events.some(e=>e.stage==='SECTION_ZERO_ACTIONS'&&e.section===config.failedGroup),'zero-action failure not diagnosed');}
+    if(config.fakeAfterFirst)assert(result.questionCounts?.verifiedQuestions===1&&result.questionCounts.failed===1&&result.questionCounts.firstFailedQuestion===1,'incorrect first-failure question counts');
+    if(config.sectionMissingAt!==undefined)assert(result.reason==='UNSUPPORTED_NATIVE_RESET_REQUIRED'&&result.resetEvidence?.find(e=>e.index===3)?.section===0,'missing section reset evidence');
+    if(config.backwardAfterCheckbox){assert(active===0&&resetCount===0,'unexpected navigation triggered recovery/reset');assert(!log.slice(log.indexOf('unexpected-backward:4:0')+1).some(v=>v.startsWith('navigate:')),'coordinator concealed backward navigation');}
+    if(config.cancelledRecovery){assert(resetCount===1&&!result.events.some(e=>e.phase==='recovery-verified'),'cancelled reset was accepted');
+      assert(!log.slice(log.lastIndexOf('reset-confirm')+1).some(v=>v.startsWith('answer:')||v.startsWith('mutation:')),'answer applied after cancelled recovery');}
+    if(config.checkboxDelay||config.ambiguousCheckbox)assert([...checkboxClicks.values()].every(n=>n===1)&&checkboxClicks.size===1,'failed transition was clicked again or skipped');
+    if(config.noMutation)assert(resetCount===0&&solveCount===0&&JSON.stringify(model)===before,'preflight refusal changed answers');
+    if(config.noSolve||config.radioResetFailure||config.textResetFailure||config.missingConfirmation||config.visibleOnlyReset)assert(solveCount===0,'solve before complete reset');
+   }
+  }
+  cases.push(config.name);
+ }catch(error){failed.push({name:config.name,error:String(error.message)});}
+ timers.forEach(clearTimeout);timers=[];document.querySelectorAll('.dialog-really-reload-all,.dialog-really-reload').forEach(n=>n.remove());
+}
+document.body.append(Object.assign(document.createElement('pre'),{id:'test-result',textContent:JSON.stringify({passed:cases.length,cases,failed})}));
+})().catch(error=>document.body.append(Object.assign(document.createElement('pre'),{id:'test-error',textContent:error.stack||String(error)})));
+</script></body></html>

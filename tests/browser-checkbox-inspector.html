@@ -1,0 +1,82 @@
+<!doctype html><html><head><meta charset="utf-8"><style>[hidden]{display:none!important}.is-checkbox__icon{display:inline-block;width:24px;height:24px}</style></head><body>
+<h1 class="learningObject__title">1e | Writing | 1</h1>
+<div id="content_wrap_0" class="content-wrap"><div class="layout__rubric">Select all the necessary fields.</div><div class="layout__content"></div></div>
+<script>window.chrome={runtime:{onMessage:{addListener(listener){window.sparkSend=message=>new Promise(resolve=>listener(message,null,resolve));}}}};</script>
+<script src="/tests/checkbox-inspector-fixture.js"></script><script src="/cdn_proxy/bea8dba8-79f9-41d8-87f9-cea219792b3d/data.js"></script>
+<script src="/qti.js"></script><script src="/core/site-registry.js"></script><script src="/solvers/interactions.js"></script><script src="/solvers/sequence.js"></script><script src="/solvers/text-correction.js"></script><script src="/answer-sources/embedded-qti.js"></script><script src="/core/runtime.js"></script><script src="/adapters/ngl.js"></script><script src="/adapters/generic.js"></script><script src="/content.js"></script><script src="/text-writing.js"></script>
+<script>
+(async()=>{
+  const fixture=window.checkboxFixture,expected=fixture.syntheticQtiSelectedIds,cases=[];
+  const assert=(ok,message)=>{if(!ok)throw Error(message)};
+  const container=document.querySelector('.layout__content');
+  let clicks=[],mode='',submitted=0;
+  const id=index=>'C0_'+index;
+  const nodes=()=>[...container.querySelectorAll('[role="checkbox"]')];
+  const selected=()=>nodes().filter(n=>n.querySelector('input').checked).map(n=>id(Number(n.id.match(/-(\d+)$/)[1]))).sort();
+  function render(initial=[],order=fixture.order){
+    const widget=document.createElement('div');widget.className=fixture.rootClasses;
+    const group=document.createElement('div');group.className='choice_interaction algn-ver has-input';group.setAttribute('role','group');
+    for(const index of order){
+      const checked=initial.includes(id(index)),node=document.createElement('div');
+      node.id='input-checkbox-s0-c0-'+index;node.className='input-checkbox-choice-c0-'+index+' input-checkbox has-input';node.classList.toggle('input-checkbox-checked',checked);
+      node.setAttribute('role','checkbox');node.setAttribute('aria-checked',String(checked));
+      const icon=document.createElement('span');icon.className='is-checkbox__icon';icon.textContent='.';
+      const input=document.createElement('input');input.type='checkbox';input.checked=checked;input.tabIndex=-1;
+      const label=document.createElement('span');label.className='is-checkbox-choice-text';label.textContent='Option '+(index+1);
+      node.append(icon,input,label);group.append(node);
+    }
+    widget.append(group);container.replaceChildren(widget);
+  }
+  container.addEventListener('click',event=>{
+    const icon=event.target.closest('.is-checkbox__icon'),node=icon?.closest('[role="checkbox"]');if(!node)return;
+    clicks.push(node.id);if(mode==='noTransition')return;
+    const value=node.getAttribute('aria-checked')!=='true';node.setAttribute('aria-checked',String(value));node.classList.toggle('input-checkbox-checked',value);node.querySelector('input').checked=value;
+    if(mode==='rerender'||mode==='reorder')render(selected(),mode==='reorder'?fixture.order.slice().reverse():fixture.order);
+    if(mode==='identityChanged')node.querySelector('.is-checkbox-choice-text').textContent='Changed option';
+  });
+  document.addEventListener('submit',event=>{submitted++;event.preventDefault()});
+  async function request(type,extra={}){const response=await sparkSend({type,...extra});assert(response?.ok,response?.error||type);return response.result}
+  async function setup(initial=[],options={}){
+    mode=options.mode||'';clicks=[];render(initial);
+    if(options.paintOnly)for(const node of nodes())node.classList.add('input-checkbox-checked');
+    if(options.noPaint)for(const node of nodes())node.classList.remove('input-checkbox-checked');
+    if(options.inputMismatch)nodes()[0].querySelector('input').checked=!nodes()[0].querySelector('input').checked;
+    if(options.duplicate)nodes()[1].id=nodes()[0].id;
+    const scan=await request('SPARK_SCAN');assert(scan.architecture.adapterId==='ngl','Wrong adapter');assert(scan.questions.length===1&&scan.questions[0].kind==='checkbox','Checkbox was misclassified');
+    assert(SparkTextWriting.inspect({allowAuxRecording:true}).found===false,'Checkbox was routed to Writing');
+    const script=document.querySelector('script[src$="/data.js"]');if(options.missing)script.remove();
+    const key=await request('SPARK_QTI',{ids:['q1']});if(options.missing)document.head.append(script);
+    return {scan,key};
+  }
+  const apply=answer=>request('SPARK_APPLY',{answers:[answer]});
+  const forged=()=>({id:'q1',answer:'Synthetic untrusted answer',selectedIds:expected.slice()});
+  async function success(name,initial=[],options={}){
+    const {scan,key}=await setup(initial,options);assert(scan.questions[0].choiceIds.length===8,name+': not all choices found');assert(key.reason==='complete'&&key.answers[0]?.source==='qti',name+': trusted QTI unavailable');
+    assert(JSON.stringify(key.answers[0].selectedIds.slice().sort())===JSON.stringify(expected.slice().sort()),name+': wrong synthetic key');
+    const result=await apply(key.answers[0]);assert(result[0]?.status==='filled',name+': '+JSON.stringify(result));
+    assert(JSON.stringify(selected())===JSON.stringify(expected.slice().sort()),name+': native checked set differs');
+    for(const node of nodes()){const wanted=expected.includes(id(Number(node.id.match(/-(\d+)$/)[1])));assert(node.classList.contains('input-checkbox-checked')===wanted&&node.getAttribute('aria-checked')===String(wanted),name+': DOM not committed')}
+    const changes=initial.filter(x=>!expected.includes(x)).length+expected.filter(x=>!initial.includes(x)).length;assert(clicks.length===changes,name+': correct selections were unnecessarily toggled');
+    cases.push(name);return key.answers[0];
+  }
+  await success('empty checkbox set');
+  await success('preserve correct partial selection',[expected[0]]);
+  await success('remove wrong selections',[id(1),id(5)]);
+  await success('already correct requires no clicks',expected);
+  await success('remove extras from full set',fixture.order.map(id));
+  await setup();for(const index of fixture.manualClickIndices)container.querySelector('#input-checkbox-s0-c0-'+index+' .is-checkbox__icon').click();
+  assert(JSON.stringify(selected())===JSON.stringify(fixture.observedFinalIndices.map(id).sort()),'Inspector toggle replay differs');
+  const replayInitial=selected();await success('reconcile observed seven-click state using synthetic QTI',replayInitial);
+  await success('widget rerender on every click',[id(1)],{mode:'rerender'});
+  await success('rerender and shuffle retain stable IDs',[id(1)],{mode:'reorder'});
+  let answer=await success('repeated Solve setup',[id(1)]);const count=clicks.length;assert((await apply(answer))[0]?.status==='filled'&&clicks.length===count,'Repeated Solve toggled correct state');cases.push('repeated Solve is idempotent');
+  container.querySelector('#input-checkbox-s0-c0-0 .is-checkbox__icon').click();container.querySelector('#input-checkbox-s0-c0-1 .is-checkbox__icon').click();clicks=[];
+  assert((await apply(answer))[0]?.status==='filled'&&JSON.stringify(selected())===JSON.stringify(expected.slice().sort())&&clicks.length===2,'Repeated Solve failed to repair manual toggles');cases.push('repeated Solve repairs later manual changes');
+  const missing=await setup([id(1)],{missing:true});assert(!missing.key.answers.length,'Invented QTI key');const before=container.innerHTML;assert((await apply(forged()))[0]?.status!=='filled'&&clicks.length===0&&container.innerHTML===before,'Missing QTI caused a mutation');cases.push('missing QTI refuses forged selectedIds');
+  const valid=await setup();assert(valid.key.answers.length===1,'Missing synthetic QTI');assert((await apply({...valid.key.answers[0],selectedIds:[id(1),id(2),id(3)]}))[0]?.status!=='filled'&&clicks.length===0,'Untrusted selectedIds accepted');cases.push('supplied IDs must match trusted QTI');
+  for(const scenario of [{name:'no transition is not retried',initial:[],options:{mode:'noTransition'}},{name:'changed label refuses stale mapping',initial:[],options:{mode:'identityChanged'}},{name:'checked class alone is insufficient',initial:[],options:{paintOnly:true}},{name:'native and ARIA checked without class is unverified',initial:expected,options:{noPaint:true}},{name:'native and ARIA disagreement refuses write',initial:[],options:{inputMismatch:true}},{name:'duplicate DOM IDs refuse QTI',initial:[],options:{duplicate:true}}]){
+    const {key}=await setup(scenario.initial,scenario.options);const outcome=await apply(key.answers[0]||forged());assert(outcome[0]?.status!=='filled',scenario.name+': falsely verified '+JSON.stringify(outcome));assert(clicks.length<=1,scenario.name+': unsafe repeated click');cases.push(scenario.name);
+  }
+  assert(submitted===0,'Unexpected submit');document.body.append(Object.assign(document.createElement('pre'),{id:'test-result',textContent:JSON.stringify({passed:cases.length,cases})}));
+})().catch(error=>document.body.append(Object.assign(document.createElement('pre'),{id:'test-error',textContent:error.stack||String(error)})));
+</script></body></html>

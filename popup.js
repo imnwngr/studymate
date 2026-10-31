@@ -185,6 +185,31 @@ function updateAnswers() {
     }
   }
 }
+async function solveWriting(writing,tabId){
+          if(writing.error)throw new Error('WRITING_DETECT: '+writing.error);
+          const context=await SparkVideoWriting.capture(chrome,tabId,writing.frameId,writing);
+          if(!context?.contextToken)throw new Error('WRITING_CONTEXT_CHANGED: Không xác minh được bài tập hoặc editor.');
+          status(writing.videoUrl?'Đang phân tích video bằng Gemini…':'Đang tạo đáp án bài viết…');
+          let response;
+          try{
+            if(writing.videoUrl){
+              $('cancelVideo').hidden=false;
+              response=await chrome.runtime.sendMessage({type:'SPARK_VIDEO_SOLVE',operationId:state.solveOperation,payload:{videoUrl:writing.videoUrl,instructions:writing.exercise}});
+              $('cancelVideo').hidden=true;
+            }else response=await chrome.runtime.sendMessage({type:'SPARK_TEXT_WRITING',exercise:writing.exercise});
+          }catch(error){throw new Error('WRITING_AI: '+errString(error));}
+          if(!response?.ok)throw new Error('WRITING_AI: '+(response?.error||'Không thể tạo đáp án.'));
+          if(typeof response.answer!=='string'||!response.answer.trim()||response.answer.length>20000||/^\s*\x60{3}/.test(response.answer))throw new Error('WRITING_OUTPUT: Phản hồi không phải đáp án văn bản hợp lệ.');
+          let current;
+          try{current=await SparkTextWriting.scanFrame(chrome,tabId,writing.frameId,writing.allowAuxRecording?{allowAuxRecording:true}:{});}catch(error){throw new Error('WRITING_RECHECK: '+errString(error));}
+          if(!current.found||current.error||current.frameId!==writing.frameId||current.rootId!==writing.rootId||current.exercise!==writing.exercise||current.videoUrl!==writing.videoUrl)throw new Error('WRITING_CHANGED: Bài tập đã thay đổi; hãy quét lại.');
+          let placed;
+          try{placed=await SparkVideoWriting.writeText(chrome,tabId,writing.frameId,response.answer,context);}catch(error){throw new Error('WRITING_EDITOR: '+errString(error));}
+          if(!placed.written)throw new Error('WRITING_EDITOR: '+(placed.error||'Không thể xác minh.'));
+          status('Đã điền và xác minh đáp án. Hãy kiểm tra trước khi nộp.','success');
+          state.writingFrameId=writing.frameId;state.writingCompleted=true;
+          return true;
+}
 async function solve() {
   if(!state.questions.length)return false;
   state.lastApplyVerified=false;$('submitNext').disabled=true;
@@ -193,14 +218,31 @@ async function solve() {
     const all=state.questions.map(q=>({id:q.id,kind:q.kind,context:q.context,
       localContext:q.localContext||'',options:q.options,choiceIds:q.choiceIds||[],choiceLabelsVerified:q.choiceLabelsVerified===true,orderTokens:q.orderTokens||[],rubric:q.rubric,wordBank:q.wordBank||'',hint:q.hint,before:q.before,after:q.after}));
     const payload={title:state.title,uiLanguage:I.language,questions:all};
-    let qti=[];
+    let qti=[],qtiFailure=null;
     try {
       const read=await sendFrame(state.frameId,{type:'SPARK_QTI',ids:all.map(q=>q.id)});
       solveDiagnostic('qti',{frameId:state.frameId,ok:read?.ok===true,
         reason:read.result?.reason,answers:read.result?.answers?.length||0,
         diagnostics:read.result?.diagnostics?.slice(0,20),error:read.error});
+      qtiFailure=read?.result;
       if(read?.ok && Array.isArray(read.result?.answers))qti=read.result.answers;
     } catch { /* QTI is best effort; a missed key must not block AI fallback. */ }
+    if(qtiFailure?.reason==='deferredCategory' && /\|\s*writing(?: skill)?\s*\|/i.test(state.title) && all.length===1 && all[0].kind==='text'){
+      const writing=await SparkTextWriting.scanFrame(chrome,state.tabId,state.frameId,{allowAuxRecording:true});
+      if(!writing.found){
+        const detail=writing.diagnostic;
+        if(detail)solveDiagnostic('WRITING_DETECT_DETAIL',{frameId:state.frameId,...detail});
+        const selector=detail?.selectors?.join(', ')||'unknown';
+        const location=detail?.path||'unknown';
+        throw new Error('WRITING_DETECT: '+(writing.reason||'UNKNOWN')+(detail?' ['+selector+'; '+location+']':'')+' (frame '+state.frameId+').');
+      }
+      return await solveWriting(writing,state.tabId);
+    }
+    if(all.length===1&&all[0].kind==='review'&&(qti.length!==1||!qti[0]?.reviewVerified)){
+      state.answers=new Map();state.solved=false;state.verifiedQti=false;updateAnswers();
+      status('UNSUPPORTED Review'+(Number.isInteger(qtiFailure?.group)?' group '+qtiFailure.group:'')+': '+
+        (qtiFailure?.diagnostics?.[0]||qtiFailure?.reason||'complete QTI unavailable'),'error');return false;
+    }
     const trusted=new Map();
     let labelsUpdated=false;
     for(const answer of qti){
@@ -217,7 +259,7 @@ async function solve() {
       trusted.set(answer.id,answer);
     }
     const remaining=all.filter(q=>!trusted.has(q.id));
-    const eligibleFallback=remaining.filter(q=>!['checkbox','linkingLines'].includes(q.kind));
+    const eligibleFallback=remaining.filter(q=>!['checkbox','linkingLines','pronunciation','textCorrection','review'].includes(q.kind));
     let fallback=null;
     if(eligibleFallback.length){
       try {
@@ -276,10 +318,12 @@ async function applyAnswers() {
     const answer=String(a?.answer||'').trim();
     if(!answer || (a.source!=='user'&&a.confidence==='low')) {missing++;continue;}
     // Double check all option-backed answers before trying to click.
-    if(q.options?.length && q.kind!=='multi' && q.kind!=='match' && !q.options.some(o=>normalized(o)===normalized(answer))) {missing++;continue;}
+    if(q.options?.length && q.kind!=='multi' && q.kind!=='checkbox' && q.kind!=='match' && !q.options.some(o=>normalized(o)===normalized(answer))) {missing++;continue;}
     if(q.kind==='checkbox' && (a.source!=='qti'||!Array.isArray(a.selectedIds)||!a.selectedIds.length)) {missing++;continue;}
     if(['multi','checkbox'].includes(q.kind) && a.source==='qti' && (!Array.isArray(a.selectedIds)||
       a.selectedIds.some(id=>!q.choiceIds?.includes(id)))){missing++;continue;}
+    if(q.kind==='review'&&(!q.applyable||a.source!=='qti'||!a.reviewVerified)){missing++;continue;}
+    if(q.kind==='pronunciation'&&(!q.applyable||a.source!=='qti'||!a.markingVerified)){missing++;continue;}
     if(q.kind==='linkingLines'&&(!q.applyable||a.source!=='qti'||!a.linkingVerified)){missing++;continue;}
     answers.push({id:q.id,answer,...(a.selectedIds?.length&&a.source==='qti'?{selectedIds:a.selectedIds}:{}),...(q.kind==='order'&&a.source==='qti'&&Array.isArray(a.orderedTokens)?{orderedTokens:a.orderedTokens}:{}),...(q.kind==='textCorrection'&&a.source==='qti'&&Array.isArray(a.corrections)?{corrections:a.corrections}:{}),...(q.kind==='gapWordPool'&&a.source==='qti'&&a.wordPoolVerified&&Array.isArray(a.pairs)?{pairs:a.pairs,wordPoolVerified:true}:{})});
   }
@@ -290,7 +334,8 @@ async function applyAnswers() {
     const response=await sendFrame(state.frameId,{type:'SPARK_APPLY',answers});
     if(!response?.ok) throw new Error(response?.error||t('fillFailed'));
     const results=response.result;
-    solveDiagnostic('apply',{frameId:state.frameId,adapterId:state.architecture?.adapterId||'ngl',results:results.slice(0,60)});
+    const loggedResults=results.map(r=>({id:r.id,status:r.status,reason:r.reason,phase:r.phase,group:r.group}));
+    solveDiagnostic('apply',{frameId:state.frameId,adapterId:state.architecture?.adapterId||'ngl',results:loggedResults.slice(0,60)});
     const filled=results.filter(x=>x.status==='filled').length;
     const manual=results.filter(x=>x.status==='manual').length;
     const uncertain=results.filter(x=>x.status==='uncertain').length;
@@ -301,7 +346,7 @@ async function applyAnswers() {
     state.lastApplyVerified=missing===0 && results.length===state.questions.length &&
       results.every(x=>x.status==='filled') && !state.questions.some(q=>q.kind==='textCorrection');
     solveDiagnostic(state.lastApplyVerified?'PLACEMENT_VERIFIED':'APPLY_BLOCKED',{frameId:state.frameId,filled,manual,uncertain,missing});
-    $('submitNext').disabled=!state.lastApplyVerified||
+    $('submitNext').disabled=!state.lastApplyVerified||state.questions.some(q=>q.kind==='review')||
       (state.architecture&&!state.architecture.capabilities.includes('verified-submit'));
     if(filled) { document.querySelector('[data-phase="apply"]')?.classList.add('is-done'); document.querySelector('[data-phase="apply"]')?.classList.remove('is-current'); }
     return state.lastApplyVerified;
@@ -310,8 +355,23 @@ async function applyAnswers() {
 async function autoSolveAndFill() {
   $('auto').disabled=true;
   state.solveOperation='solve-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2);
-  state.lastApplyVerified=false;
+  state.lastApplyVerified=false;state.writingCompleted=false;
   try {
+    try {
+      const [videoTab]=await chrome.tabs.query({active:true,currentWindow:true});
+      if(videoTab?.id && SparkSites.recognize(videoTab.url)?.adapterId==='ngl'){
+        let writing;
+        try{
+          for(let attempt=0;attempt<9;attempt++){
+            writing=await SparkTextWriting.scan(chrome,videoTab.id);
+            if(!writing.pending||writing.found)break;
+            await new Promise(resolve=>setTimeout(resolve,250));
+          }
+        }catch(error){throw new Error('WRITING_SCAN: '+errString(error));}
+        if(writing.pending&&!writing.found)throw new Error('WRITING_NOT_READY: Editor bài viết chưa sẵn sàng.');
+        if(writing.found){await solveWriting(writing,videoTab.id);return;}
+      }
+    } catch(error) {status(errString(error),'error');return;}
     // Bounded intra-activity screen workflow; no learning-object navigation.
     const seen=new Set();
     for(let iteration=0;iteration<30;iteration++){
@@ -321,6 +381,7 @@ async function autoSolveAndFill() {
       if(seen.has(key)){status('Screen did not advance; stopped safely.','error');break;}
       seen.add(key);
       if(!(await solve())){solveDiagnostic('APPLY_NOT_REQUESTED',{reason:'solveNotReady',frameId:state.frameId});break;}
+      if(state.writingCompleted)break;
       if(!(await applyAnswers()))break;
       // QTI provides known keys. AI guesses or manual edits cannot establish correctness.
       // The correction widget can show the replacement without confirming
@@ -347,7 +408,8 @@ async function autoSolveAndFill() {
       }
     }
   } finally {
-    solveDiagnostic(state.lastApplyVerified?'SOLVE_COMPLETED':'SOLVE_ABORTED',{operationId:state.solveOperation,tabId:state.tabId,frameId:state.questions.length?state.frameId:null,result:state.lastApplyVerified?'popup-apply-verified':'popup-stopped'});
+    solveDiagnostic(state.writingCompleted||state.lastApplyVerified?'SOLVE_COMPLETED':'SOLVE_ABORTED',{operationId:state.solveOperation,tabId:state.tabId,frameId:state.writingCompleted?state.writingFrameId:(state.questions.length?state.frameId:null),result:state.writingCompleted?'writing-verified':state.lastApplyVerified?'popup-apply-verified':'popup-stopped'});
+    $('cancelVideo').hidden=true;
     $('auto').disabled=false;
   }
 }
@@ -372,6 +434,7 @@ async function submitAndNext(){
 }
 $('submitNext').addEventListener('click',submitAndNext);
 
+$('cancelVideo').addEventListener('click',()=>{if(state.solveOperation)chrome.runtime.sendMessage({type:'SPARK_VIDEO_CANCEL',operationId:state.solveOperation});});
 $('auto').addEventListener('click',autoSolveAndFill);
 $('settings').addEventListener('click',()=>chrome.runtime.openOptionsPage());
 $('inspector').addEventListener('click',async()=>{

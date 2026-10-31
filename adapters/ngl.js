@@ -2,12 +2,13 @@
   'use strict';
   if(root.SparkNglAdapter)return;
   const adapter={id:'ngl',answerSource:'qti',
-    detect:({document})=>!!document.querySelector('.content-wrap[id^="content_wrap_"],.learningObject__title,.layout__content .interaction,.interaction.om-text-gap,.interaction.is-linking-lines,.interaction.is-checkbox'),
+    detect:({document})=>!!document.querySelector('.content-wrap[id^="content_wrap_"],.learningObject__title,.layout__content .interaction,.interaction.om-text-gap,.interaction.is-linking-lines,.interaction.is-checkbox,.interaction.im-marking.ic-speaking-and-recording,.interaction.ic-text-correction.replace'),
     create(context){
   'use strict';
   let lastScan = { title: '', questions: [], refs: new Map(), applied:new Map(), appliedChoiceIds:new Map(), submitted:false,activeRoot:null };
   let qtiCache = null;
   let qtiPending = null;
+  let reviewOperation=null,reviewTrace=null,reviewSequence=0;
   const tidy = (v) => String(v || '').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
   const normalized = (v) => tidy(v).normalize('NFKC').toLowerCase().replace(/[’]/g, "'");
   // Correction tokens are case-sensitive: Occupation != occupation.
@@ -49,9 +50,9 @@
       !el.closest('[hidden],[inert]') && getComputedStyle(el).display!=='none');
     return visible[0]||roots[0]||document;
   }
-  function choiceGroup(block){
+  function choiceGroup(block,includeHidden=false){
     const controls=[...block.querySelectorAll('[role="checkbox"],[role="radio"]')]
-      .filter(el=>!el.closest('[hidden],[inert]') && !el.matches('[aria-hidden="true"]'));
+      .filter(el=>includeHidden||(!el.closest('[hidden],[inert]') && !el.matches('[aria-hidden="true"]')));
     if(!controls.length)return null;
     const kind=controls[0].getAttribute('role')==='checkbox'?'multi':'choice';
     if(controls.some(el=>el.getAttribute('role')!==(kind==='multi'?'checkbox':'radio')))return null;
@@ -178,10 +179,602 @@
         Number(match[1])<=total?Number(match[1]):null);
     return ordinals.length && ordinals.every(n=>n!==null&&n===ordinals[0])?ordinals[0]:null;
   }
+  const markingSelector='.interaction.im-marking.ic-speaking-and-recording';
+  function markingColor(css){
+    // Let Chrome parse CSS Color 4 and alpha forms instead of parsing serialized rgb() ourselves.
+    const canvas=document.createElement('canvas');canvas.width=canvas.height=1;
+    const ctx=canvas.getContext('2d',{willReadFrequently:true});
+    if(!ctx||!CSS.supports('color',css))return null;
+    ctx.fillStyle=css;ctx.fillRect(0,0,1,1);
+    return [...ctx.getImageData(0,0,1,1).data];
+  }
+  function markingSnapshot(){
+    const roots=[...activeContentRoot().querySelectorAll(markingSelector)].filter(n=>!n.closest('[hidden],[inert]'));
+    if(roots.length!==1)return null;
+    const widget=roots[0],items=[...widget.querySelectorAll('.im-marking__item.markable')];
+    if(widget.querySelectorAll('.im-marking__item-button').length!==items.length ||
+      [...widget.querySelectorAll('.marked,.imMarking__item--marked')].some(node=>!items.includes(node)))return null;
+    const erasers=[...widget.querySelectorAll('.im-marking__button.erase')];
+    const options=[...widget.querySelectorAll('.im-marking__button.toggle')];
+    if(!items.length||items.length>100||erasers.length!==1||options.length!==1)return null;
+    const color=[...options[0].classList].filter(c=>/^color-[0-9a-f]{6}$/i.test(c));
+    if(color.length!==1)return null;
+    const groups=[],nodes=[],buttons=[];
+    for(const item of items){
+      const p=item.closest('p'),contents=[...item.querySelectorAll('[id^="markable-content-"]')];
+      const clicks=[...item.querySelectorAll('.im-marking__item-button')];
+      if(!p||!widget.contains(p)||contents.length!==1||clicks.length!==1||!clicks[0].contains(contents[0]))return null;
+      if(!nodes.includes(p)){nodes.push(p);groups.push([]);}
+      if(nodes.indexOf(p)!==groups.length-1)return null;
+      groups[groups.length-1].push(tidy(contents[0].textContent));buttons.push(clicks[0]);
+    }
+    if(groups.flat().some(label=>!label))return null;
+    const expectedColor='#'+color[0].slice(6).toLowerCase();
+    const observations=items.map(item=>{
+      const marked=item.classList.contains('marked'),other=item.classList.contains('imMarking__item--marked');
+      const background=getComputedStyle(item).backgroundColor;
+      // NGL announces the assigned category on each marked parent, independently of its paint/alpha.
+      const annotation=item.cloneNode(true);
+      annotation.querySelectorAll('[id^="markable-content-"]').forEach(node=>node.remove());
+      const annotationText=tidy(annotation.textContent);
+      const options=[...annotationText.matchAll(/Marked as Option\s+(\d+)\./gi)].map(m=>Number(m[1]));
+      const observed={marked,other,options,background};
+      if(marked!==other)return {...observed,state:'ambiguous'};
+      if(!marked)return {...observed,state:options.length?'ambiguous':null};
+      if(options.length)return {...observed,state:options.every(n=>n===1)?expectedColor:'optionMismatch'};
+      if(/Marked as/i.test(annotationText))return {...observed,state:'ambiguous'};
+      const rgba=markingColor(background);
+      const expected=expectedColor.slice(1).match(/../g).map(n=>parseInt(n,16));
+      return {...observed,state:rgba&&rgba[3]>0&&expected.every((n,i)=>Math.abs(n-rgba[i])<=2)?expectedColor:
+        rgba&&rgba[3]>0?'colorMismatch':'ambiguous'};
+    });
+    const state=observations.map(o=>o.state);
+    return {widget,items,buttons,groups,state,observations,erase:erasers[0],option:options[0],color:'#'+color[0].slice(6).toLowerCase()};
+  }
+  function markingLive(question){
+    if(activeContentRoot()!==lastScan.activeRoot)return null;
+    const live=markingSnapshot();
+    return live&&live.color===question.markingColor&&JSON.stringify(live.groups)===JSON.stringify(question.markingGroups)&&
+      [...live.buttons,live.erase,live.option].every(actionable)?live:null;
+  }
+  function markingIndex(question,target){
+    const groups=question.markingGroups;
+    return Number.isInteger(target.group)&&Number.isInteger(target.segment)&&target.group>=0&&target.segment>=0&&
+      groups[target.group]&&target.segment<groups[target.group].length?
+      groups.slice(0,target.group).reduce((n,g)=>n+g.length,0)+target.segment:-1;
+  }
+  function markingMatches(question,targets){
+    const live=markingLive(question);
+    if(!live||!targets)return false;
+    const expected=live.state.map(()=>null);
+    for(const target of targets){const index=markingIndex(question,target);if(index<0||expected[index]!==null)return false;expected[index]=target.color;}
+    return live.state.every((value,i)=>value===expected[i]);
+  }
+  async function setPronunciation(id){
+    const question=lastScan.questions.find(q=>q.id===id),targets=lastScan.trustedMarking?.get(id);
+    const live=()=>markingLive(question);
+    const selected=(s,mode)=>mode==='erase'?s.erase.classList.contains('activated')&&!s.option.classList.contains('activated'):
+      s.option.classList.contains('activated')&&!s.erase.classList.contains('activated');
+    const poll=async predicate=>{
+      const deadline=Date.now()+2000;
+      do{const s=live();if(s&&predicate(s))return true;await wait(Math.min(50,Math.max(1,deadline-Date.now())));}while(Date.now()<deadline);
+      const s=live();return Boolean(s&&predicate(s));
+    };
+    const failure=(reason,index,mode)=>{
+      let offset=0,group=0;
+      while(group<question.markingGroups.length&&index>=offset+question.markingGroups[group].length)
+        offset+=question.markingGroups[group++].length;
+      const s=live(),observed=s?.observations[index]||null;
+      return {status:'uncertain',detail:reason+' group='+ (group+1)+' segment='+ (index-offset+1)+
+        ' observed='+JSON.stringify(observed),reason,phase:mode,group:group+1,segment:index-offset+1,observed};
+    };
+    const mode=async mode=>{
+      const s=live();if(!s)return false;
+      if(!selected(s,mode)){try{(mode==='erase'?s.erase:s.option).click();}catch{return false;}}
+      return poll(s=>selected(s,mode));
+    };
+    return globalThis.SparkSolvers.solve('pronunciation',{
+      preflight:()=>Boolean(targets&&live()&&targets.every(t=>markingIndex(question,t)>=0)),
+      read:()=>live()?.state||null,index:t=>markingIndex(question,t),mode,
+      click:async(index,phase)=>{
+        let s=live();if(!s||!s.buttons[index])return failure('TARGET_MISMATCH',index,phase);
+        if(!selected(s,phase)&&!await mode(phase))return failure('OPTION_ACTIVATION_FAILED',index,phase);
+        s=live();if(!s||!selected(s,phase))return failure('TARGET_MISMATCH',index,phase);
+        const wanted=phase==='erase'?null:question.markingColor;
+        if(s.state[index]===wanted)return true;
+        // A pending or ambiguous mark must never receive another toggle click.
+        if(phase==='mark'&&s.state[index]!==null)return failure('TARGET_STATE_MISMATCH',index,phase);
+        try{s.buttons[index].click();}catch{return failure('CLICK_FAILED',index,phase);}
+        if(await poll(s=>s.state[index]===wanted))return true;
+        s=live();
+        const reason=!s?'TARGET_MISMATCH':s.state[index]==='optionMismatch'?'OPTION_MISMATCH':
+          s.state[index]==='colorMismatch'?'COLOR_MISMATCH':s.state[index]==='ambiguous'?'AMBIGUOUS_MARKED_STATE':'DOM_TRANSITION_TIMEOUT';
+        return failure(reason,index,phase);
+      },
+      verify:()=>markingMatches(question,targets)
+    },{targets});
+  }
+
+  function reviewSnapshot(){
+    const roots=[...document.querySelectorAll('.content-wrap[id^="content_wrap_"]')]
+      .sort((a,b)=>Number(a.id.slice(13))-Number(b.id.slice(13)));
+    if(roots.length<2||roots.length>20||roots.some((r,i)=>r.id!=='content_wrap_'+i))return {reason:'REVIEW_SCREEN_IDENTITY',group:0};
+    const groups=[];
+    for(let index=0;index<roots.length;index++){
+      const root=roots[index],widgets=[...root.querySelectorAll('.interaction')].filter(n=>!n.parentElement.closest('.interaction'));
+      if(widgets.length!==1)return {reason:'REVIEW_INTERACTION_UNAVAILABLE',group:index};
+      const widget=widgets[0],kind=widget.matches('.is-radiobutton')?'choice':widget.matches('.is-checkbox')?'checkbox':
+        widget.matches('.ic-text-gap')?'text':widget.matches('.is-dropdown')?'dropdown':null;
+      if(!kind)return {reason:'REVIEW_TYPE_UNSUPPORTED',group:index};
+      const questions=[],bindings=[];
+      if(kind==='choice'||kind==='checkbox'){
+        const controls=[...widget.querySelectorAll(kind==='choice'?'[role="radio"]':'[role="checkbox"]')],buckets=new Map();
+        for(const node of controls){
+          const match=(node.id||node.className||'').match(/(?:input-(?:checkbox|radio)-(?:s\d+-)?c|choice-c)(\d+)-(\d+)/);
+          if(!match)return {reason:'REVIEW_CHOICE_IDENTITY',group:index};
+          const ordinal=Number(match[1]);if(!buckets.has(ordinal))buckets.set(ordinal,[]);buckets.get(ordinal).push(node);
+        }
+        for(let i=0;i<buckets.size;i++){
+          const nodes=buckets.get(i);if(!nodes)return {reason:'REVIEW_QUESTION_IDENTITY',group:index};
+          const group=choiceGroup({querySelectorAll:()=>nodes},true);
+          if(!group||!group.choiceLabelsVerified)return {reason:'REVIEW_CHOICE_LABELS',group:index};
+          group.items.sort((a,b)=>a.id.localeCompare(b.id));
+          const question={id:'s'+index+'q'+i,kind,options:group.items.map(x=>x.label),choiceIds:group.items.map(x=>x.id),
+            choiceLabelsVerified:true,reviewIdentity:true,applyable:true,context:'',rubric:''};
+          questions.push(question);bindings.push({items:group.items});
+        }
+      }else{
+        const controls=kind==='text'?[...widget.querySelectorAll('input[type="text"],input:not([type])')]:
+          [...widget.querySelectorAll('select,.wrapper-dropdown,button[role="combobox"]')].filter(n=>!n.parentElement.closest('.wrapper-dropdown'));
+        for(let i=0;i<controls.length;i++){
+          const node=controls[i],options=kind==='dropdown'?getOptions(node).sort():[];
+          if(kind==='dropdown'&&(options.length<2||new Set(options.map(normalized)).size!==options.length))
+            return {reason:'REVIEW_DROPDOWN_OPTIONS',group:index};
+          questions.push({id:'s'+index+'q'+i,kind,options,applyable:true,context:'',rubric:''});bindings.push({node});
+        }
+      }
+      if(!questions.length)return {reason:'REVIEW_QUESTIONS_MISSING',group:index};
+      groups.push({index,root,widget,kind,questions,bindings});
+    }
+    return {groups};
+  }
+  const reviewSignature=snapshot=>JSON.stringify(snapshot.groups?.map(g=>({kind:g.kind,questions:g.questions})));
+  function scanReview(title){
+    if(!/\breview\b/i.test(title))return null;
+    const candidates=document.querySelectorAll('.interaction.is-radiobutton,.interaction.is-checkbox,.interaction.ic-text-gap,.interaction.is-dropdown');
+    if(document.querySelectorAll('.content-wrap[id^="content_wrap_"]').length<2&&
+      !/(?:^|\|)\s*review\s*$/i.test(title)&&candidates.length<2)return null;
+    const snapshot=reviewSnapshot();
+    if(!snapshot.reason&&new Set(snapshot.groups.map(g=>g.kind)).size<2)return null;
+    const question={id:'q1',kind:'review',options:[],context:'Complete mixed Review',applyable:!snapshot.reason,
+      reviewGroups:snapshot.groups?.map(g=>({kind:g.kind,questions:g.questions}))||[],
+      ...(snapshot.reason?{diagnostic:'UNSUPPORTED: '+snapshot.reason+' group='+snapshot.group,
+        reviewFailure:{reason:snapshot.reason,group:snapshot.group}}:{})};
+    lastScan={title,questions:[question],refs:new Map([['q1',{kind:'review'}]]),activeRoot:activeContentRoot(),
+      reviewFrameUrl:location.origin+location.pathname,
+      reviewSignature:reviewSignature(snapshot),reviewScanFailure:snapshot.reason?{reason:snapshot.reason,group:snapshot.group}:null,
+      applied:new Map(),appliedChoiceIds:new Map(),appliedOrder:new Map(),trustedReview:null,submitted:false,screenIndex:0,screenCount:null};
+    return {title,questions:[question],hasExercise:true,screenIndex:0,screenCount:null,frameUrl:location.origin+location.pathname};
+  }
+  function reviewLive(){
+    if(exerciseTitle()!==lastScan.title||location.origin+location.pathname!==lastScan.reviewFrameUrl)return null;
+    const snapshot=reviewSnapshot();
+    return !snapshot.reason&&reviewSignature(snapshot)===lastScan.reviewSignature?snapshot:null;
+  }
+  function reviewState(index,diagnostic){
+    const group=reviewLive()?.groups[index];if(!group)return null;
+    const result=[];
+    for(const [position,binding] of group.bindings.entries()){
+      if(binding.items){
+        const selected=[];
+        for(const item of binding.items){
+          const aria=item.node.getAttribute('aria-checked'),flag=item.node.classList.contains(group.kind==='choice'?'input-radio-checked':'input-checkbox-checked');
+          const input=item.node.querySelector('input[type="radio"],input[type="checkbox"]');
+          if(!['true','false'].includes(aria)||flag!==(aria==='true')||(input&&input.checked!==flag))return null;
+          if(flag)selected.push(item.id);
+        }
+        if(group.kind==='choice'&&selected.length>1)return null;result.push(selected);
+      }else if(group.kind==='text')result.push(binding.node.value);
+      else{
+        const node=binding.node;
+        if(node.matches('select')){const selected=node.selectedOptions[0];result.push(!selected||!tidy(selected.textContent)?null:tidy(selected.textContent));continue;}
+        const label=node.matches('.listbox__label')?node:node.querySelector('.listbox__label'),options=optionNodes(node);
+        const handle=node.matches('[role="combobox"]')?node:node.querySelector('[role="combobox"]');
+        const answer=lastScan.trustedReview?.[index]?.answers?.[position];
+        const matching=answer?options.filter(o=>tidy(o.textContent)===answer.answer).length:0;
+        const fail=(reason,detail)=>{if(diagnostic)Object.assign(diagnostic,{reason,detail,section:index,question:position,
+          qtiResponseResolved:Boolean(answer?.responseId),expectedOptionResolved:Boolean(answer?.selectedIds?.length),
+          comboboxMapped:Boolean(handle),currentSelectionReadable:false,expanded:handle?.getAttribute('aria-expanded')==='true',matchingOptions:matching});return null;};
+        if(!label||!handle)return fail('CONTROL_UNMAPPED','combobox or label unavailable');
+        const selected=options.filter(o=>o.getAttribute('aria-selected')==='true'||o.matches('.listbox__choice--selected,.selected,.is-selected'));
+        const placeholder=Boolean(label.querySelector('.listbox__placeholder'))||!tidy(label.textContent);
+        if(!selected.length&&placeholder)result.push(null);
+        else if(selected.length===1&&tidy(selected[0].textContent)===tidy(label.textContent))result.push(tidy(label.textContent));
+        else return fail(selected.length>1?'OPTION_AMBIGUOUS':'SELECTION_UNREADABLE',
+          !options.length?'options unavailable':selected.length>1?'multiple selected options':'selection and label disagree');
+      }
+    }
+    return result;
+  }
+  const reviewEmpty=index=>{
+    const group=reviewLive()?.groups[index],state=reviewState(index);
+    return Boolean(group&&state&&state.every(value=>Array.isArray(value)?value.length===0:group.kind==='text'?value==='':value===null));
+  };
+  async function reviewPoll(predicate){
+    const operation=reviewOperation,end=Date.now()+2200;
+    do{if(reviewOperation!==operation)return false;reviewObserve();if(reviewOperation?.fault)return false;if(predicate())return true;await wait(50);}while(Date.now()<end);
+    if(reviewOperation!==operation)return false;
+    reviewObserve();return !reviewOperation?.fault&&Boolean(predicate());
+  }
+  function reviewLog(stage,data={}){
+    const op=reviewOperation;if(!op)return;
+    const event={sequence:++op.eventSequence,ms:Date.now()-op.started,stage,phase:op.phase,intended:op.intended,
+      actual:op.actual,interaction:op.actual===null?null:{section:op.actual,kind:op.plan[op.actual]?.kind,qti:op.plan[op.actual]?.filename},
+      operation:op.trigger,resetCount:op.resetCount,generation:op.generation,...data};
+    if(op.events.length===400)op.events.shift();op.events.push(event);
+    console.debug('[Studymate Review]',op.operationId,event);
+  }
+  function reviewObserve(){
+    const op=reviewOperation;if(!op)return null;
+    const snapshot=reviewLive(),active=snapshot?.groups.filter(g=>visible(g.root));
+    const actual=active?.length===1?active[0].index:null,previous=op.actual;
+    if(snapshot&&snapshot.groups.some((g,i)=>g.widget!==op.widgets[i])){
+      const rebound=op.widgets.length>0;if(rebound)op.generation++;
+      op.widgets=snapshot.groups.map(g=>g.widget);reviewLog(rebound?'DOM_RELOAD':'DOM_BOUND');
+    }
+    op.actual=actual;
+    if(previous!==actual)reviewLog('ACTIVE_SCREEN_CHANGED',{from:previous,to:actual,initiator:op.navigation?'coordinator-navigation':op.phase==='reset'?'native-reset':'external-or-native'});
+    if(['solve','verify-final'].includes(op.phase)&&!op.fault){
+      let reason=null;
+      if(!snapshot&&!op.navigation)reason='STALE_INTERACTION_ROOT';
+      else if(actual===null&&!op.navigation)reason='ACTIVE_SCREEN_MISMATCH';
+      else if(actual===null)return snapshot;
+      else if(op.navigation?actual!==op.navigation.from&&actual!==op.navigation.to:actual!==op.intended)
+        reason=previous!==null&&actual<previous?'UNEXPECTED_BACKWARD_NAVIGATION':'ACTIVE_SCREEN_MISMATCH';
+      if(reason){op.fault={reason,actual,intended:op.intended,trigger:op.trigger};reviewLog('GUARD_FAILED',{reason});}
+    }
+    return snapshot;
+  }
+  function reviewCurrent(index){
+    const op=reviewOperation,snapshot=reviewObserve();
+    return Boolean(op&&!op.fault&&op===reviewOperation&&snapshot&&op.actual===index);
+  }
+  async function reviewActivate(index){
+    const op=reviewOperation;if(op){reviewObserve();if(op.fault)return false;}
+    for(let count=0;count<=20;count++){
+      if(reviewOperation!==op)return false;
+      const snapshot=reviewObserve()||reviewLive();if(!snapshot||op?.fault)return false;
+      const active=snapshot.groups.filter(g=>visible(g.root));if(active.length!==1)return false;
+      if(active[0].index===index){if(op){op.intended=index;if(op.phase==='solve')reviewLog('SECTION_ACTIVATED',{section:index});}return true;}
+      const links=[...document.querySelectorAll('#activity_controls [data-interaction],#continous-enumeration-nav [data-interaction]')]
+        .filter(n=>n.getAttribute('data-interaction')===String(index)&&actionable(n));
+      const direction=active[0].index<index?'forward':'previous',controls=availableActionControls(direction);
+      if(op?.phase==='solve'&&direction==='previous'){
+        op.fault={reason:'UNEXPECTED_BACKWARD_NAVIGATION',actual:active[0].index,intended:index,trigger:'activate'};return false;
+      }
+      if(!links.length&&controls.length!==1)return false;
+      const destination=links.length?index:active[0].index+(direction==='forward'?1:-1);
+      if(op){op.intended=index;op.navigation={from:active[0].index,to:destination};op.trigger='navigate:'+active[0].index+'->'+destination;
+        if(op.phase==='solve')reviewLog('SECTION_ADVANCE',{from:active[0].index,to:destination});
+        reviewLog('NAVIGATE_START',{direction,trigger:links.length?'data-interaction':direction});}
+      try{(links[0]||controls[0]).click();}catch{return false;}
+      const arrived=await reviewPoll(()=>{const s=reviewLive();return s&&s.groups.filter(g=>visible(g.root)).length===1&&visible(s.groups[destination].root);});
+      reviewObserve();if(op){
+        if(!arrived&&!op.fault)op.fault={reason:reviewLive()?'NAVIGATION_FAILED':'STALE_INTERACTION_ROOT',actual:op.actual,intended:index,trigger:op.trigger};
+        reviewLog(arrived&&!op.fault?'NAVIGATE_COMMITTED':'NAVIGATE_FAILED',{direction});op.navigation=null;
+      }
+      if(!arrived||op?.fault)return false;
+    }
+    return false;
+  }
+  function reviewFailure(reason,phase,group,expected=null){
+    const op=reviewOperation;reviewObserve();
+    const cause=reason;
+    reason=op?.fault?.reason||(String(reason||'').startsWith('UNSUPPORTED_')||['SECTION_VERIFY_FAILED','QTI_UNRESOLVED','CONTROL_UNMAPPED','SELECTION_UNREADABLE','OPTION_AMBIGUOUS','STATE_NOT_COMMITTED'].includes(reason)?reason:/NAVIGATION/.test(reason)?'NAVIGATION_FAILED':phase==='reset'?'RESET_FAILED':phase==='solve'?'SECTION_SOLVE_FAILED':phase==='verify'?'FINAL_VERIFICATION_FAILED':reason);
+    const kind=lastScan.questions[0].reviewGroups[group]?.kind||null,observed=reviewState(group);
+    if(op)reviewLog('FAILURE',{reason,cause,group});
+    return {status:'uncertain',reason,cause,phase:op?.phase||phase,group,kind,expected,observed,
+      ...(op?{operationId:op.operationId,lastCompletedSection:op.lastCompleted,intendedNextSection:op.intended,actualActiveScreen:op.actual,triggeringOperation:op.fault?.trigger||op.trigger}:{}),
+      detail:reason+' group='+group+' type='+kind+' expected='+JSON.stringify(expected)+' observed='+JSON.stringify(observed)};
+  }
+  async function applyReview(answers){
+    if(reviewOperation)return [{id:'q1',status:'uncertain',reason:'CONCURRENT_SOLVE_ATTEMPT',detail:'CONCURRENT_SOLVE_ATTEMPT',operationId:reviewOperation.operationId}];
+    const supplied=answers.filter(a=>a.id==='q1'),plan=lastScan.trustedReview;
+    if(supplied.length!==1||answers.length!==1||!plan)return [{id:'q1',...reviewFailure('UNSUPPORTED_COMPLETE_QTI_REQUIRED','preflight',lastScan.reviewScanFailure?.group??0)}];
+    const op={operationId:'review-'+Date.now().toString(36)+'-'+(++reviewSequence),started:Date.now(),phase:'preflight',intended:null,
+      actual:null,lastCompleted:null,trigger:'apply',resetCount:0,generation:0,widgets:[],events:[],eventSequence:0,plan,fault:null,navigation:null};
+
+    reviewOperation=op;reviewTrace=op;
+    const current=index=>reviewOperation===op&&!op.finished&&reviewCurrent(index);
+    const observer=new MutationObserver(()=>{if(reviewOperation===op)reviewObserve();});
+    observer.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class','hidden','style','aria-hidden']});
+    const controlEvent=event=>{
+      const node=event.target.closest?.('[data-event],[data-interaction]');
+      if(!node||!node.closest('#activity_controls,#continous-enumeration-nav'))return;
+      reviewLog('NATIVE_CONTROL_EVENT',{event:event.type,control:node.getAttribute('data-event')||'section',section:node.getAttribute('data-interaction'),trusted:event.isTrusted});
+    };
+    document.addEventListener('click',controlEvent,true);document.addEventListener('keyup',controlEvent,true);
+    reviewObserve();reviewLog('SOLVE_START');
+    try{
+    const verify=index=>{
+      const state=reviewState(index),group=plan[index];
+      return Boolean(state&&state.length===group.answers.length&&group.answers.every((a,i)=>
+        Array.isArray(state[i])?JSON.stringify(state[i].slice().sort())===JSON.stringify(a.selectedIds.slice().sort()):state[i]===a.answer));
+    };
+    const stateSummary=index=>{
+      const state=reviewState(index);if(!state)return null;
+      return state.map((value,i)=>({position:i,selectedCount:Array.isArray(value)?value.length:undefined,
+        hasValue:Array.isArray(value)?undefined:value!==null&&value!=='',matchesExpected:Array.isArray(value)?
+          JSON.stringify(value.slice().sort())===JSON.stringify(plan[index].answers[i].selectedIds.slice().sort()):value===plan[index].answers[i].answer}));
+    };
+    const actionStart=(section,question,kind)=>{op.actions.attempted++;reviewLog('ANSWER_ACTION_START',{section,question,solver:kind,attempted:op.actions.attempted});};
+    const actionCommit=(section,question,kind)=>{op.actions.acknowledged++;reviewLog('ANSWER_ACTION_COMMITTED',{section,question,solver:kind,source:'dom',acknowledged:op.actions.acknowledged,observed:stateSummary(section)});};
+    let resetKind=null,globalResetIndex=null;
+    const reconcile=plan.every(group=>['choice','checkbox','text','dropdown'].includes(group.kind));
+    if(!reconcile)return [{id:'q1',...reviewFailure('UNSUPPORTED_RECONCILIATION_STRATEGY','preflight',
+      plan.findIndex(group=>!['choice','checkbox','text','dropdown'].includes(group.kind)),'supported section-specific strategy')}];
+    const reset=async(all,index)=>{
+      if(op.phase!=='reset'||all&&op.globalResetCount)return reviewFailure('RESET_REENTRY_BLOCKED','reset',index);
+      const buttons=availableActionControls(all?'reset_all':'reset');
+      if(buttons.length!==1)return reviewFailure('NATIVE_RESET_UNAVAILABLE','reset',index);
+      op.resetCount++;if(all)op.globalResetCount=(op.globalResetCount||0)+1;op.trigger=all?'reset_all':'reset:'+index;reviewLog('RESET_START',{all});
+      try{buttons[0].click();}catch{return reviewFailure('NATIVE_RESET_CLICK_FAILED','reset',index);}
+      const selector=all?'.dialog-really-reload-all':'.dialog-really-reload';
+      if(!await reviewPoll(()=>[...document.querySelectorAll(selector)].filter(visible).length===1))return reviewFailure('RESET_CONFIRMATION_MISSING','reset',index);
+        const dialog=[...document.querySelectorAll(selector)].find(visible),ok=[...dialog.querySelectorAll('[data-button="ok"]')].filter(actionable);
+        if(ok.length!==1)return reviewFailure('RESET_CONFIRMATION_AMBIGUOUS','reset',index);
+        const previous=reviewLive();
+        if(!previous)return reviewFailure('REVIEW_MAPPING_CHANGED','reset',index);
+        const indices=all?plan.map((_,i)=>i):[index];
+        // Native reload empties contentWrap before rendering fresh interaction views.
+        const reloaded=i=>!previous.groups[i].widget.isConnected&&reviewLive()?.groups[i].widget!==previous.groups[i].widget;
+        try{ok[0].click();}catch{return reviewFailure('RESET_CONFIRMATION_FAILED','reset',index);}
+        if(!await reviewPoll(()=>![...document.querySelectorAll(selector)].some(visible)&&reviewLive()&&
+          indices.every(i=>reloaded(i)&&reviewEmpty(i))&&(!all||reviewObserve()?.groups[0]&&op.actual===0))){
+          const failed=indices.find(i=>!reloaded(i)||!reviewEmpty(i))??index;
+          return reviewFailure(reloaded(failed)?'RESET_INCOMPLETE':'RESET_RELOAD_NOT_OBSERVED','reset',failed,'native reload completed and empty');
+        }
+      reviewLog('RESET_COMMITTED',{all});
+      return null;
+    };
+    const outcome=await globalThis.SparkSolvers.solve('review',{
+      count:plan.length,
+      reconcile,
+      inspectHidden:true,
+      phase:phase=>{op.phase=phase;op.intended=op.actual;op.trigger='phase:'+phase;reviewLog('PHASE_START');},
+      check:current,
+      completed:index=>{op.lastCompleted=index;const status=op.actions.attempted?'Corrected':'AlreadyCorrect';
+        reviewLog('SECTION_PASS',{section:index,status,...op.questions,attempted:op.actions.attempted,acknowledged:op.actions.acknowledged});
+        return {index,status,...op.questions,actionsNeeded:op.actions.needed,actionsCommitted:op.actions.acknowledged};},
+      preflight:async()=>{
+        if(!reviewLive()||plan.length!==lastScan.questions[0].reviewGroups.length)return reviewFailure('REVIEW_MAPPING_CHANGED','preflight',0);
+        if([...document.querySelectorAll('.ui-dialog,.dialog-really-reload-all,.dialog-really-reload')].some(visible))
+          return reviewFailure('UNSUPPORTED_DIALOG_ALREADY_OPEN','preflight',0);
+        const resetEvidence=[];
+        for(let index=0;index<plan.length;index++){
+          if(!await reviewActivate(index))return reviewFailure('REVIEW_NAVIGATION_UNAVAILABLE','preflight',index);
+          const group=reviewLive()?.groups[index];
+          const diagnostic={};
+          if(!group||!reviewState(index,diagnostic)){
+            const reason=diagnostic.reason||'REVIEW_STATE_AMBIGUOUS';
+            reviewLog('STATE_READ_FAILED',diagnostic);
+            return {...reviewFailure(reason,'preflight',index),...(diagnostic.reason?{question:diagnostic.question,stateDiagnostic:diagnostic}:{})};
+          }
+          if(!reconcile)resetEvidence.push({index,global:availableActionControls('reset_all').length,section:availableActionControls('reset').length});
+          for(const binding of group.bindings){
+            const controls=binding.items?binding.items.map(x=>x.node):[binding.node];
+            if(controls.some(n=>!actionable(n)||n.readOnly||n.matches('.listbox--prefilled,.prefill,[data-prefilled="true"]')))
+              return reviewFailure('REVIEW_CONTROL_UNAVAILABLE','preflight',index);
+            if(!reconcile&&group.kind==='dropdown'&&binding.node.matches('select')&&![...binding.node.options].some(o=>o.value===''))
+              return reviewFailure('UNSUPPORTED_DROPDOWN_EMPTY_STATE','preflight',index,'blank placeholder');
+          }
+        }
+        if(reconcile){
+          if(!await reviewActivate(0))return reviewFailure('REVIEW_NAVIGATION_UNAVAILABLE','preflight',0);
+          reviewLog('PREFLIGHT_ALL_COMPLETE',{strategy:'reconcile'});return null;
+        }
+        if(!resetEvidence.some(item=>item.global===1&&item.index>0)){
+          if(await reviewPoll(()=>availableActionControls('reset_all').length===1))
+            resetEvidence[plan.length-1].global=1;
+        }
+        const global=resetEvidence.filter(item=>item.global===1&&item.index>0).at(-1);
+        const missing=resetEvidence.find(item=>item.section!==1);
+        if(global){resetKind='all';globalResetIndex=global.index;}
+        else if(!missing)resetKind='section';
+        else{
+          const firstOnly=resetEvidence[0].global===1;
+          return {...reviewFailure(firstOnly?'UNSUPPORTED_GLOBAL_RESET_NAVIGATION_UNOBSERVABLE':'UNSUPPORTED_NATIVE_RESET_REQUIRED','preflight',missing.index,
+            firstOnly?'global reset on a later screen or one section reset per section':'one global reset or one section reset per section'),resetEvidence};
+        }
+        reviewLog('RESET_STRATEGY',{strategy:resetKind,section:globalResetIndex,availability:resetEvidence});
+        reviewLog('PREFLIGHT_ALL_COMPLETE');
+        return null;
+      },
+      reset:async()=>{
+        if(resetKind==='all'){
+          if(!await reviewActivate(globalResetIndex))return reviewFailure('REVIEW_NAVIGATION_FAILED','reset',globalResetIndex);
+          return reset(true,globalResetIndex);
+        }
+        for(let index=0;index<plan.length;index++){
+          if(!await reviewActivate(index))return reviewFailure('REVIEW_NAVIGATION_FAILED','reset',index);
+          const result=await reset(false,index);if(result)return result;
+        }
+        if(!await reviewActivate(0))return reviewFailure('REVIEW_NAVIGATION_FAILED','reset',0);
+        return null;
+      },
+      recover:async(scope,index)=>{
+        if(scope==='section'){
+          if(!await reviewActivate(index)||availableActionControls('reset').length!==1)
+            return reviewFailure('NATIVE_SECTION_RESET_UNAVAILABLE','reset',index,'verified section reset');
+          const before=plan.map((_,i)=>reviewState(i));
+          if(before.some(state=>!state))return reviewFailure('SCOPED_RESET_STATE_UNAVAILABLE','reset',index,'observable section states');
+          const failure=await reset(false,index);if(failure)return failure;
+          if(plan.some((_,i)=>i!==index&&JSON.stringify(reviewState(i))!==JSON.stringify(before[i])))
+            return reviewFailure('SCOPED_RESET_CHANGED_OTHER_SECTION','reset',index,'other sections unchanged');
+          op.recoveryScope='section';return null;
+        }
+        if(scope!=='all')return reviewFailure('UNSUPPORTED_RESET_SCOPE','reset',index);
+        let globalIndex=null;
+        for(let i=0;i<plan.length;i++){
+          if(!await reviewActivate(i))return reviewFailure('REVIEW_NAVIGATION_FAILED','reset',i);
+          if(i>0&&availableActionControls('reset_all').length===1)globalIndex=i;
+        }
+        if(globalIndex===null||!await reviewActivate(globalIndex))return reviewFailure('NATIVE_GLOBAL_RESET_UNAVAILABLE','reset',index,'verified global reset');
+        const failure=await reset(true,globalIndex);if(!failure)op.recoveryScope='all';return failure;
+      },
+      activate:reviewActivate,empty:index=>{const empty=reviewEmpty(index);reviewLog('EMPTY_VERIFIED',{section:index,passed:empty});return empty;},
+      verify:index=>{reviewLog('SECTION_VERIFY_START',{section:index,source:'dom',active:op.actual===index});
+        const observed=stateSummary(index),passed=verify(index),verifiedQuestions=observed?.filter(q=>q.matchesExpected).length??0;
+        reviewLog(passed?'SECTION_VERIFY_PASS':'SECTION_VERIFY_FAIL',{...(op.questions?.section===index?op.questions:{}),section:index,passed,
+          expectedQuestions:plan[index].answers.length,verifiedQuestions,failed:plan[index].answers.length-verifiedQuestions,
+          firstFailedQuestion:observed?observed.find(q=>!q.matchesExpected)?.position??null:0,observed});return passed;},
+      failure:(reason,phase,index)=>{
+        const observed=stateSummary(index),expectedQuestions=plan[index]?.answers.length??0,verifiedQuestions=observed?.filter(q=>q.matchesExpected).length??0;
+        return {...reviewFailure(reason==='GROUP_FINAL_MISMATCH'?'SECTION_VERIFY_FAILED':reason,phase,index,phase==='reset'?'empty':plan[index]?.answers.map(a=>a.selectedIds?.length?a.selectedIds:a.answer)),
+          questionCounts:{...(op.questions?.section===index?op.questions:{}),expectedQuestions,mappedControls:reviewLive()?.groups[index]?.bindings.length??0,
+            verifiedQuestions,failed:expectedQuestions-verifiedQuestions,firstFailedQuestion:observed?observed.find(q=>!q.matchesExpected)?.position??null:0}};
+      },
+      solveGroup:async index=>{
+        let currentPosition=-1;
+        try{
+        if(!current(index))return reviewFailure('ACTIVE_SCREEN_MISMATCH','solve',index);
+        const initial=reviewState(index),already=verify(index);
+        if(!initial)return reviewFailure('REVIEW_STATE_AMBIGUOUS','solve',index);
+        const needed=initial.reduce((total,value,i)=>{
+          const answer=plan[index].answers[i];
+          if(Array.isArray(value))return total+(plan[index].kind==='checkbox'?
+            new Set([...value,...answer.selectedIds].filter(id=>value.includes(id)!==answer.selectedIds.includes(id))).size:
+            Number(value.length!==1||value[0]!==answer.selectedIds[0]));
+          return total+Number(value!==answer.answer);
+        },0);
+        op.actions={section:index,attempted:0,acknowledged:0,needed};op.trigger='section:'+index;
+        const live=reviewLive()?.groups[index];
+        op.questions={section:index,expectedQuestions:plan[index].answers.length,mappedControls:live?.bindings.length??0,
+          alreadyCorrect:0,corrected:0,failed:0,verifiedQuestions:0,firstFailedQuestion:null};
+        if(op.questions.mappedControls!==op.questions.expectedQuestions)return reviewFailure('REVIEW_CONTROL_MAPPING_INCOMPLETE','solve',index);
+        reviewLog('SECTION_START',{section:index});
+        reviewLog('SECTION_SOLVER_PLANNED',{section:index,solver:plan[index].kind,qti:plan[index].filename,
+          expectedResponses:plan[index].answers.length,mappedControls:live?.bindings.length??0,
+          actualControls:live?.bindings.reduce((n,b)=>n+(b.items?.length||1),0)??0});
+        reviewLog('RECONCILIATION_PLAN',{section:index,strategy:'state-reconcile',actionsNeeded:needed,currentState:stateSummary(index),
+          expectedState:{responses:plan[index].answers.length}});
+        for(let position=0;position<plan[index].answers.length;position++){
+          currentPosition=position;
+          if(!current(index))return reviewFailure('ACTIVE_SCREEN_MISMATCH','solve',index);
+          const answer=plan[index].answers[position],group=()=>current(index)?reviewLive()?.groups[index]:null,binding=()=>group()?.bindings[position];
+          const existing=reviewState(index)?.[position];
+          if(existing===undefined||existing===null&&plan[index].kind!=='dropdown')return reviewFailure('REVIEW_STATE_AMBIGUOUS','solve',index);
+          const matches=(value,expected)=>Array.isArray(value)?JSON.stringify(value.slice().sort())===JSON.stringify(expected.selectedIds.slice().sort()):value===expected.answer;
+          if(index<4&&matches(existing,answer)){op.questions.alreadyCorrect++;op.questions.verifiedQuestions++;continue;}
+          const perform=async()=>{
+          reviewLog('SOLVER_DISPATCH',{section:index,question:position,solver:plan[index].kind});
+          let result;
+          if(plan[index].kind==='choice'||plan[index].kind==='checkbox'){
+            const ids=group().questions[position].choiceIds;
+            const activate=async id=>{
+              const item=binding()?.items.find(x=>x.id===id);if(!item||!actionable(item.node))throw Error('Review choice disappeared');
+              const state=reviewState(index)?.[position];if(!state)throw Error('Review choice state unavailable');
+              const intended=!state.includes(id),target=item.node.querySelector(plan[index].kind==='checkbox'?'.is-checkbox__icon':'.is-radiobutton__icon');
+              if(!target||!actionable(target))throw Error('Review choice target unavailable');
+              op.trigger='section:'+index+':choice';actionStart(index,position,plan[index].kind);target.click();
+              if(!await reviewPoll(()=>{const selected=reviewState(index)?.[position];return selected&&selected.includes(id)===intended;}))throw Error('Review choice transition unconfirmed');
+              actionCommit(index,position,plan[index].kind);
+            };
+            result=await globalThis.SparkSolvers.solve(plan[index].kind,{
+              ids,single:plan[index].kind==='choice',wait,
+              checked:id=>reviewState(index)?.[position]?.includes(id),activate,
+              read:()=>{const state=current(index)?reviewState(index)?.[position]:null;return state?new Map(ids.map(id=>[id,state.includes(id)])):null;}
+            },answer);
+          }else if(plan[index].kind==='text')result=await globalThis.SparkSolvers.solve('text',{
+            write:async value=>{const node=binding()?.node;if(!node||!actionable(node))throw Error('Review gap disappeared');
+              op.trigger='section:'+index+':text';actionStart(index,position,'text');setText(node,value);
+              if(!await reviewPoll(()=>reviewState(index)?.[position]===value))throw Error('Review text transition unconfirmed');actionCommit(index,position,'text');},
+            matches:value=>reviewState(index)?.[position]===value
+          },answer);
+          else result=await globalThis.SparkSolvers.solve('dropdown',{
+            hasOption:value=>group()?.questions[position].options.filter(o=>o===value).length===1,
+            select:async value=>{
+              let node=binding()?.node;if(!node||!actionable(node))throw Error('Review dropdown disappeared');
+              if(node.matches('select')){
+                const option=[...node.options].filter(o=>tidy(o.textContent)===value);if(option.length!==1)throw Error('Review option ambiguous');
+                  op.trigger='section:'+index+':dropdown';actionStart(index,position,'dropdown');
+                  Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'selectedIndex').set.call(node,[...node.options].indexOf(option[0]));
+                node.dispatchEvent(new Event('input',{bubbles:true}));node.dispatchEvent(new Event('change',{bubbles:true}));
+              }else{
+                const button=node.matches('[role="combobox"]')?node:node.querySelector('button[role="combobox"],[data-event="toggle"]');
+                if(!button||!actionable(button))throw Error('Review dropdown handle missing');
+                if(button.getAttribute('aria-expanded')!=='true')button.click();
+                if(!await reviewPoll(()=>{node=binding()?.node;return node&&optionNodes(node).some(o=>tidy(o.textContent)===value&&actionable(o));}))throw Error('Review dropdown options unavailable');
+                  const options=optionNodes(binding().node).filter(o=>tidy(o.textContent)===value&&actionable(o));if(options.length!==1)throw Error('Review dropdown option ambiguous');
+                  op.trigger='section:'+index+':dropdown';actionStart(index,position,'dropdown');options[0].click();
+              }
+                if(!await reviewPoll(()=>{
+                  const currentNode=binding()?.node,handle=currentNode?.matches('[role="combobox"]')?currentNode:currentNode?.querySelector('[role="combobox"]');
+                  return reviewState(index)?.[position]===value&&(node.matches('select')||handle?.getAttribute('aria-expanded')!=='true');
+                }))
+                  throw Error('Review dropdown transition unconfirmed');actionCommit(index,position,'dropdown');
+            },matches:value=>reviewState(index)?.[position]===value
+          },answer);
+          return result;
+          };
+          let question;
+          if(index>=4){
+            const attemptedBefore=op.actions.attempted,committedBefore=op.actions.acknowledged;
+            question=await globalThis.SparkSolvers.checkAndReconcile(existing,answer,{replace:true},{matches,
+              isEmpty:value=>Array.isArray(value)?value.length===0:value===null||value==='',
+              apply:perform,read:()=>current(index)?reviewState(index)?.[position]:undefined,
+              onStage:(stage,data)=>reviewLog(stage,{section:index,question:position,interaction:plan[index].kind,...data,
+                actionAttempted:op.actions.attempted>attemptedBefore,actionCommitted:op.actions.acknowledged>committedBefore})});
+          }else{
+            const result=await perform();question={status:result.status==='filled'&&current(index)&&matches(reviewState(index)?.[position],answer)?'Corrected':'Failed',reason:result.detail};
+          }
+          if(question.status==='ResetRequired')return {status:'recovery',scope:question.scope,group:index,question:position};
+          if(question.status==='Failed'||!current(index)){
+            op.questions.failed++;op.questions.firstFailedQuestion=position;
+            if(op.actions.attempted===0)reviewLog('SECTION_ZERO_ACTIONS',{section:index,question:position,attempted:0,acknowledged:0});
+            reviewLog('SECTION_VERIFY_FAIL',{section:index,...op.questions,observed:stateSummary(index),attempted:op.actions.attempted,acknowledged:op.actions.acknowledged});
+            const dropdownReason=plan[index].kind==='dropdown'?(question.reason==='OPTION_NOT_UNIQUE'?'OPTION_AMBIGUOUS':
+              question.reason==='ACTION_EXCEPTION'||question.reason==='QUESTION_MISMATCH'||question.reason==='SELECTION_NOT_VERIFIED'?'STATE_NOT_COMMITTED':null):null;
+            return {...reviewFailure(dropdownReason||question.reason||'QUESTION_UNVERIFIED','solve',index,answer),question:position,questionCounts:{...op.questions},...(question.error?{error:question.error}:{})};
+          }
+          if(question.status==='AlreadyCorrect')op.questions.alreadyCorrect++;else op.questions.corrected++;
+          op.questions.verifiedQuestions++;
+        }
+        if(op.questions.verifiedQuestions!==op.questions.expectedQuestions)return reviewFailure('SECTION_QUESTION_COUNT_MISMATCH','solve',index);
+        if((op.actions.attempted===0&&(!already||!verify(index)))||op.actions.acknowledged!==op.actions.attempted){reviewLog('SECTION_ZERO_ACTIONS',{section:index,attempted:op.actions.attempted,acknowledged:op.actions.acknowledged});
+          reviewLog('SECTION_VERIFY_FAIL',{section:index,observed:stateSummary(index)});return reviewFailure('SECTION_ACTIONS_UNVERIFIED','solve',index);}
+        return null;
+        }catch(error){if(currentPosition>=0&&op.questions?.section===index){op.questions.failed++;op.questions.firstFailedQuestion=currentPosition;}
+          reviewLog('SECTION_VERIFY_FAIL',{section:index,...(op.questions?.section===index?op.questions:{}),observed:stateSummary(index),attempted:op.actions?.attempted??0,acknowledged:op.actions?.acknowledged??0});
+          return {...reviewFailure('REVIEW_GROUP_EXCEPTION','solve',index,plan[index].answers),question:currentPosition>=0?currentPosition:null,
+            questionCounts:op.questions?.section===index?{...op.questions}:undefined,error:String(error?.message||error)};}
+      }
+    },{});
+    if(outcome.status==='filled')Object.assign(outcome,{responsesVerified:plan.reduce((n,g)=>n+g.answers.length,0),
+      resetMechanism:op.recoveryScope==='all'?'reset_all':op.recoveryScope==='section'?'reset':reconcile?'none':resetKind==='all'?'reset_all':'reset'});
+    if(outcome.status==='filled')lastScan.applied.set('q1',supplied[0].answer);else lastScan.applied.delete('q1');
+    reviewLog(outcome.status==='filled'?'VERIFY_FINAL_ALL_PASS':'SOLVE_FAILED',{reason:outcome.reason||null});
+    return [{id:'q1',...outcome,operationId:op.operationId,reviewDiagnostics:{operationId:op.operationId,events:op.events}}];
+    }catch(error){return [{id:'q1',...reviewFailure('SECTION_SOLVE_FAILED',op.phase,op.intended??0),error:String(error?.message||error)}];}
+    finally{observer.disconnect();document.removeEventListener('click',controlEvent,true);document.removeEventListener('keyup',controlEvent,true);op.finished=true;reviewOperation=null;}
+  }
   function scan(){
     const questions=[],refs=new Map();
     const root=activeContentRoot();
     const title=exerciseTitle();
+    const review=scanReview(title);if(review)return review;
+    const markingRoots=[...root.querySelectorAll(markingSelector)].filter(n=>!n.closest('[hidden],[inert]'));
+    if(markingRoots.length){
+      const live=markingSnapshot(),screen=screenInfo(root),id='q1';
+      const usable=Boolean(live&&[...live.buttons,live.erase,live.option].every(actionable));
+      questions.push({id,kind:'pronunciation',context:live?.groups.map(g=>g.join('')).join(' | ')||'',options:[],
+        rubric:'',applyable:usable,markingGroups:live?.groups||[],markingColor:live?.color||'',
+        ...(usable?{}:{diagnostic:'UNSUPPORTED: ambiguous marking segments or controls.'})});
+      if(usable)refs.set(id,{kind:'pronunciation'});
+      lastScan={title,questions,refs,activeRoot:root,applied:new Map(),appliedChoiceIds:new Map(),appliedOrder:new Map(),
+        trustedMarking:new Map(),submitted:false,screenIndex:screen.index,screenCount:screen.count};
+      return {title,questions,screenIndex:screen.index,screenCount:screen.count,hasExercise:true,frameUrl:location.origin+location.pathname};
+    }
     const deferredCategory=/\|\s*(?:speaking|writing(?: skill)?)\s*\|/i.test(title);
     const rubric=tidy(root.querySelector('.layout__rubric')?.textContent ||
       document.querySelector('.layout__rubric')?.textContent).slice(0,500);
@@ -285,25 +878,22 @@
     }
     // A specific, answer-keyed word-correction activity is eligible even in
     // Writing skill. Essay/extended writing remains excluded.
-    const correctionWidget=root.querySelector('.interaction.ic-text-correction.replace .ki24_view');
-    const correctionTiles=correctionWidget?[...correctionWidget.querySelectorAll('.input-text')]:[];
-    if(correctionWidget&&correctionTiles.length&& !root.querySelector('textarea,[contenteditable="true"]')){
-      const id='q1';
-      questions.push({id,kind:'textCorrection',context:tidy(correctionWidget.textContent).slice(0,1200),
-        localContext:tidy(correctionWidget.textContent).slice(0,1200),options:[],
-        correctionTokens:correctionTiles.map(t=>tidy(t.textContent)),
-        correctionModifiedTokens:correctionTiles.filter(t=>t.classList.contains('modified') ||
-          t.classList.contains('icTextCorrection__item--modified')).map(t=>tidy(t.textContent)),
-        correctionModifiedIndices:correctionTiles.flatMap((t,i)=>
-          (t.classList.contains('modified')||t.classList.contains('icTextCorrection__item--modified'))?[i]:[]),
-        rubric,wordBank:'',hint:'',before:'',after:'',
-        block:1,position:1,applyable:true});
-      refs.set(id,{kind:'textCorrection',node:correctionWidget});
-      const screen=screenInfo(root);
+    const correctionRoots=[...root.querySelectorAll('.interaction.ic-text-correction.replace')].filter(visible);
+    if(correctionRoots.length){
+      const snapshot=correctionSnapshot(),id='q1',tiles=snapshot?.tokens||[],screen=screenInfo(root);
+      const usable=Boolean(snapshot&&tiles.every(visible));
+      questions.push({id,kind:'textCorrection',context:tidy(snapshot?.root.textContent).slice(0,1800),
+        localContext:tidy(snapshot?.root.textContent).slice(0,1800),options:[],
+        correctionGroups:snapshot?.groups.map(group=>group.map(t=>t.textContent))||[],
+        correctionTokens:tiles.map(t=>t.textContent),
+        correctionModifiedTokens:tiles.filter(t=>t.matches('.modified,.icTextCorrection__item--modified')).map(t=>t.textContent),
+        correctionModifiedIndices:tiles.flatMap((t,i)=>t.matches('.modified,.icTextCorrection__item--modified')?[i]:[]),
+        rubric,wordBank:'',hint:'',before:'',after:'',block:1,position:1,applyable:usable,
+        ...(usable?{}:{diagnostic:'UNSUPPORTED: correction sentences or tokens are ambiguous.'})});
+      if(usable)refs.set(id,{kind:'textCorrection',node:snapshot.root});
       lastScan={title,questions,refs,applied:new Map(),appliedChoiceIds:new Map(),appliedOrder:new Map(),
         submitted:false,screenIndex:screen.index,screenCount:screen.count,activeRoot:root,trustedCorrections:new Map()};
-      return {title,questions,screenIndex:screen.index,screenCount:screen.count,
-        frameUrl:location.origin+location.pathname,hasExercise:true};
+      return {title,questions,screenIndex:screen.index,screenCount:screen.count,frameUrl:location.origin+location.pathname,hasExercise:true};
     }
     const hasEditable=sourceBlocks.some(b=>getControls(b).length||(!deferredCategory&&choiceGroup(b)));
     const hasSequence=sourceBlocks.some(b=>b.closest('.os-sequence')||b.querySelector('.os-sequence__list'));
@@ -415,12 +1005,20 @@
   }
   function mapQtiAndRemember(source,questions){
     const result=globalThis.SparkQTI.fromDataJs(source,questions,new DOMParser());
+    if(questions.length===1&&['pronunciation','textCorrection'].includes(questions[0].kind)&&!result.answers.length)
+      result.reason='UNSUPPORTED';
     lastScan.trustedCorrections=new Map();
+    lastScan.trustedCorrectionOriginals=new Map();
     lastScan.trustedWordPool=new Map();
     lastScan.trustedCheckbox=new Map();
     lastScan.trustedLinking=new Map();
+    lastScan.trustedMarking=new Map();
+    lastScan.trustedReview=null;
     for(const answer of result.answers||[]){
       const question=questions.find(q=>q.id===answer.id);
+      if(question?.kind==='review'&&answer.source==='qti'&&answer.reviewVerified)lastScan.trustedReview=JSON.parse(JSON.stringify(answer.groups));
+      if(question?.kind==='pronunciation'&&answer.markingVerified&&answer.source==='qti')
+        lastScan.trustedMarking.set(answer.id,answer.targets.map(t=>({...t})));
       if(question?.kind==='linkingLines'&&answer.linkingVerified&&answer.source==='qti')
         lastScan.trustedLinking.set(answer.id,answer.pairs.map(p=>({...p})));
       if(question?.kind==='checkbox' && answer.source==='qti' &&
@@ -435,7 +1033,8 @@
 
       if(questions.find(q=>q.id===answer.id)?.kind==='textCorrection' &&
         Array.isArray(answer.corrections)&&answer.corrections.length){
-        lastScan.trustedCorrections.set(answer.id,answer.corrections.map(({from,to,tokenIndex,anchorVerified})=>({from,to,tokenIndex,anchorVerified})));
+        lastScan.trustedCorrections.set(answer.id,answer.corrections.map(e=>({...e,alternatives:e.alternatives?.slice()})));
+        if(Array.isArray(answer.originals))lastScan.trustedCorrectionOriginals.set(answer.id,answer.originals.map(o=>({...o})));
       }
     }
     return result;
@@ -451,7 +1050,7 @@
       try{return new URL(el.src).pathname.endsWith('/data.js');}catch{return false;}
     });
     if(/\|\s*(?:speaking|writing(?: skill)?)\s*\|/i.test(lastScan.title) &&
-      !(questions.length===1&&['textCorrection','gapWordPool','checkbox','linkingLines'].includes(questions[0].kind)))
+      !(questions.length===1&&['textCorrection','gapWordPool','checkbox','linkingLines','pronunciation'].includes(questions[0].kind)))
       return {answers:[],reason:'deferredCategory'};
     if(!script || !globalThis.SparkQTI)return {answers:[],reason:'noDataScript'};
     const url = new URL(script.src);
@@ -539,7 +1138,7 @@
       if(aria!=='true'&&aria!=='false')return null;
       const value=aria==='true',input=item.node.querySelector('input[type="checkbox"]');
       if(input&&input.checked!==value)return null;
-      if(item.node.classList.contains('input-checkbox-checked')&&!value)return null;
+      if(item.node.classList.contains('input-checkbox-checked')!==value)return null;
       checked.set(item.id,value);
     }
     return {widget,group,checked};
@@ -624,61 +1223,94 @@
     const style=getComputedStyle(node);
     return style.display!=='none'&&style.visibility!=='hidden'&&node.getClientRects().length>0;
   };
-  async function waitForUniqueCorrectionPopup(parent){
-    const deadline=Date.now()+1100;
-    while(Date.now()<deadline){
-      const popups=[...parent.querySelectorAll('.tc_popup')].filter(visible);
-      if(popups.length>0)return popups.length===1?popups[0]:null;
-      await wait(45);
-    }
+  function correctionSnapshot(){
+    const roots=[...activeContentRoot().querySelectorAll('.interaction.ic-text-correction.replace')].filter(visible);
+    if(roots.length!==1)return null;
+    const root=roots[0],blocks=[...root.querySelectorAll('.contentblock.ki24_view')];
+    const groups=blocks.map(block=>[...block.querySelectorAll('span.input-text')]);
+    const tokens=groups.flat();
+    if(!groups.length||groups.some(g=>!g.length)||!tokens.length||tokens.length>250||
+      new Set(tokens).size!==tokens.length||tokens.length!==root.querySelectorAll('span.input-text').length)return null;
+    return {root,groups,tokens};
+  }
+  async function waitForUniqueCorrectionPopup(resolve){
+    const deadline=Date.now()+2000;
+    do{
+      const snapshot=resolve();
+      if(snapshot){const popups=[...snapshot.root.querySelectorAll('.tc_popup')].filter(visible);
+        if(popups.length)return popups.length===1?popups[0]:null;}
+      await wait(40);
+    }while(Date.now()<deadline);
     return null;
   }
   function typeCorrectionIntoPopup(field,value){
-    if(!field?.matches('input[type="text"],input:not([type]),textarea') || !visible(field))return false;
-    // Keep focus until the OK control is clicked, like a real user. The old
-    // generic setText() blurs early and can dismiss this popup.
+    if(!field?.matches('input[type="text"]')||!actionable(field)||field.readOnly)return false;
     field.focus();
-    const proto=field.matches('textarea')?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;
-    const setter=Object.getOwnPropertyDescriptor(proto,'value')?.set;
-    if(setter)setter.call(field,value);else field.value=value;
+    const setter=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')?.set;
+    if(!setter)return false;
+    setter.call(field,value);
     field.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:value}));
-    return field.value===value;
+    field.dispatchEvent(new Event('change',{bubbles:true}));
+    return field.isConnected&&field.value===value;
   }
-  async function confirmCorrection(target,expected,popup){
-    const buttons=[...popup.querySelectorAll('a.button-submit,button.button-submit')]
-      .filter(button=>visible(button)&&/^ok$/i.test(tidy(button.textContent)));
-    if(buttons.length!==1)return false;
-    const input=[...popup.querySelectorAll('input[type="text"],input:not([type]),textarea')].filter(visible);
-    if(input.length!==1 || !typeCorrectionIntoPopup(input[0],expected))return false;
-    // Spark's change handler may run before click when focus leaves the input.
-    input[0].dispatchEvent(new Event('change',{bubbles:true}));
-    buttons[0].click();
-    const deadline=Date.now()+1800;
-    while(Date.now()<deadline){
-      if(!target.isConnected)return false;
-      if(correctionNorm(target.textContent)===correctionNorm(expected) &&
-        !target.classList.contains('editing')){
-        await wait(100);
-        return correctionNorm(target.textContent)===correctionNorm(expected);
-      }
-      await wait(60);
-    }
-    return false;
+  async function confirmCorrection(edit,resolve,popup){
+    const fail=(reason)=>({reason});
+    const current=resolve();
+    if(!current||!popup.isConnected||!current.root.contains(popup))return fail('TARGET_CHANGED');
+    const fields=[...popup.querySelectorAll('input[type="text"]')].filter(visible);
+    const buttons=[...popup.querySelectorAll('.button-submit')].filter(button=>actionable(button)&&/^ok$/i.test(tidy(button.textContent)));
+    if(fields.length!==1||buttons.length!==1)return fail('EDITOR_CONTROLS_MISSING');
+    try{if(!typeCorrectionIntoPopup(fields[0],edit.to))return fail('INPUT_EVENT_FAILED');}
+    catch{return fail('INPUT_EVENT_FAILED');}
+    const live=resolve(),popups=live?[...live.root.querySelectorAll('.tc_popup')].filter(visible):[];
+    if(!live||popups.length!==1||popups[0]!==popup||!buttons[0].isConnected||fields[0].value!==edit.to)
+      return fail('EDITOR_CHANGED_DURING_INPUT');
+    try{buttons[0].click();}catch{return fail('CONFIRMATION_FAILED');}
+    const deadline=Date.now()+2000;
+    do{
+      const after=resolve();
+      if(after&&![...after.root.querySelectorAll('.tc_popup')].some(visible)&&after.tokens[edit.tokenIndex]?.textContent===edit.to)return true;
+      await wait(40);
+    }while(Date.now()<deadline);
+    const after=resolve();
+    return fail(!after?'TARGET_CHANGED':[...after.root.querySelectorAll('.tc_popup')].some(visible)?'CONFIRMATION_TIMEOUT':'COMMITTED_TEXT_MISMATCH');
   }
-  async function setTextCorrections(widget,response){
-    const parent=widget.closest('.ic-text-correction');
+  async function setTextCorrections(id,response){
+    const question=lastScan.questions.find(q=>q.id===id),shape=question.correctionGroups;
+    const resolve=()=>{
+      if(activeContentRoot()!==lastScan.activeRoot)return null;
+      const snapshot=correctionSnapshot();
+      return snapshot&&snapshot.groups.length===shape.length&&snapshot.groups.every((g,i)=>g.length===shape[i].length)&&
+        snapshot.tokens.every(visible)?snapshot:null;
+    };
+    const editorOpen=()=>{
+      const snapshot=resolve();
+      return !snapshot||[...snapshot.root.querySelectorAll('.tc_popup')].some(visible);
+    };
     return globalThis.SparkSolvers.solve('textCorrection',{
-      correctionNorm,visible,available:()=>!!parent,
-      tokens:()=>[...widget.querySelectorAll('.input-text')],
-      modified:target=>target.classList.contains('modified')||target.classList.contains('icTextCorrection__item--modified'),
-      editorOpen:()=>[...parent.querySelectorAll('.tc_popup')].some(visible),
-      open:target=>target.click(),popup:()=>waitForUniqueCorrectionPopup(parent),confirm:confirmCorrection,
-      choose:async value=>{
-        const selector='[role="option"],[role="menuitem"],.listbox__choice,.ui-menu-item,'+
-          '.correction-option,.replace-option,[class*="correction-choice"],[class*="replacement-choice"]';
-        const options=[...parent.querySelectorAll(selector)].filter(el=>visible(el)&&!el.closest('.ki24_view')&&correctionNorm(el.textContent)===correctionNorm(value));
-        if(options.length!==1)return false;
-        options[0].click();await wait(220);return true;
+      correctionNorm:value=>String(value),visible,available:()=>Boolean(resolve()),
+      tokens:()=>resolve()?.tokens||[],editorOpen,
+      preflight:(edits,originals)=>{
+        const snapshot=resolve();
+        return Boolean(snapshot&&!editorOpen()&&originals.length===snapshot.tokens.length&&originals.every(o=>
+          Number.isInteger(o.sentence)&&Number.isInteger(o.sentenceTokenIndex)&&
+          snapshot.groups[o.sentence]?.[o.sentenceTokenIndex]===snapshot.tokens[o.tokenIndex])&&edits.every(e=>
+            e.anchorVerified===true&&snapshot.groups[e.sentence]?.[e.sentenceTokenIndex]===snapshot.tokens[e.tokenIndex]));
+      },
+      commit:async edit=>{
+        const before=resolve(),target=before?.groups[edit.sentence]?.[edit.sentenceTokenIndex];
+        if(!target||target!==before.tokens[edit.tokenIndex])return {reason:'TARGET_CHANGED'};
+        if(editorOpen())return {reason:'EDITOR_ALREADY_OPEN'};
+        try{target.click();}catch{return {reason:'POPUP_OPEN_FAILED'};}
+        const popup=await waitForUniqueCorrectionPopup(resolve);
+        if(!popup)return {reason:'POPUP_OPEN_FAILED'};
+        // The editor must belong to the token just clicked, either structurally or by its editing state.
+        const now=resolve(),active=now?.tokens[edit.tokenIndex];
+        const editing=now?.tokens.filter(n=>n.classList.contains('editing'))||[];
+        const block=active?.closest('.ki24_view');
+        if(!now||!active||!((editing.length===1&&editing[0]===active)||block?.contains(popup)))
+          return {reason:'POPUP_TARGET_AMBIGUOUS'};
+        return confirmCorrection(edit,resolve,popup);
       }
     },response);
   }
@@ -1143,6 +1775,7 @@
     }finally{lastScan.linkingBusy=false;}
   }
   async function apply(answers) {
+    if(lastScan.questions.length===1&&lastScan.questions[0].kind==='review')return applyReview(answers);
     if(!lastScan.activeRoot||activeContentRoot()!==lastScan.activeRoot){
       return (Array.isArray(answers)?answers:[]).map(a=>({id:a.id,status:'skipped',detail:'Screen changed; scan again.'}));
     }
@@ -1152,21 +1785,20 @@
       const value = tidy(response.answer);
       const found = lastScan.refs.get(id);
       if (!value) {lastScan.applied.delete(id);results.push({id,status:'skipped',detail:'Không có đáp án.'});continue;}
-      if (!found) {lastScan.applied.delete(id);results.push({id,status:'manual',detail:'Dạng này chưa hỗ trợ tương tác tự động; dùng đáp án xem trước.'});continue;}
-      if (!['checkbox','linkingLines'].includes(found.kind) && !(found.items?found.items.every(item=>document.contains(item.node)):document.contains(found.node))) {lastScan.applied.delete(id);results.push({id,status:'skipped',detail:'Bài đã thay đổi. Hãy quét lại.'});continue;}
+      if (!found) {lastScan.applied.delete(id);results.push({id,status:'manual',detail:lastScan.questions.find(q=>q.id===id)?.kind==='pronunciation'?
+        'UNSUPPORTED: marking controls or mapping unavailable.':'Dạng này chưa hỗ trợ tương tác tự động; dùng đáp án xem trước.'});continue;}
+      if (!['checkbox','linkingLines','pronunciation','textCorrection'].includes(found.kind) && !(found.items?found.items.every(item=>document.contains(item.node)):document.contains(found.node))) {lastScan.applied.delete(id);results.push({id,status:'skipped',detail:'Bài đã thay đổi. Hãy quét lại.'});continue;}
       try {
         let outcome;
-        if(found.kind==='linkingLines')outcome=await setLinkingLines(id);
+        if(found.kind==='pronunciation')outcome=await setPronunciation(id);
+        else if(found.kind==='linkingLines')outcome=await setLinkingLines(id);
         else if(found.kind==='textCorrection'){
-          const trusted=lastScan.trustedCorrections?.get(id);
-          const submitted=Array.isArray(response.corrections)?response.corrections:[];
-          if(!trusted||trusted.length!==submitted.length||
-            trusted.some((e,i)=>correctionNorm(e.from)!==correctionNorm(submitted[i].from)||
-              correctionNorm(e.to)!==correctionNorm(submitted[i].to)||
-              e.tokenIndex!==submitted[i].tokenIndex||
-              e.anchorVerified!==submitted[i].anchorVerified))
-            outcome={status:'skipped',detail:'Correction pairs were not verified against this screen’s QTI.'};
-          else outcome=await setTextCorrections(found.node,response);
+          const trusted=lastScan.trustedCorrections?.get(id),submitted=response.corrections;
+          if(!trusted||!Array.isArray(submitted)||trusted.length!==submitted.length||
+            trusted.some((e,i)=>e.from!==submitted[i].from||e.to!==submitted[i].to||e.tokenIndex!==submitted[i].tokenIndex||
+              e.sentence!==submitted[i].sentence||e.sentenceTokenIndex!==submitted[i].sentenceTokenIndex))
+            outcome={status:'skipped',detail:'UNSUPPORTED: correction mapping was not verified against current QTI.'};
+          else outcome=await setTextCorrections(id,{corrections:trusted,originals:lastScan.trustedCorrectionOriginals?.get(id)});
         }
         else if(found.kind==='gapWordPool'){
           const trusted=lastScan.trustedWordPool?.get(id);
@@ -1241,6 +1873,8 @@
       lastScan.applied.size!==lastScan.questions.length ||
       lastScan.questions.some(q=>!q.applyable))return false;
     return [...lastScan.refs.entries()].every(([id,ref])=>{
+      if(ref.kind==='review')return false;
+      if(ref.kind==='pronunciation')return markingMatches(lastScan.questions.find(q=>q.id===id),lastScan.trustedMarking?.get(id));
       if(ref.kind==='checkbox'){
         const expected=lastScan.trustedCheckbox?.get(id),applied=lastScan.appliedChoiceIds?.get(id);
         if(!expected||!applied||expected.length!==applied.length||
@@ -1412,7 +2046,7 @@
     }
     if (message.type === 'SPARK_APPLY') {
       apply(Array.isArray(message.answers)?message.answers:[])
-        .then(result=>respond({ok:true,result}),err=>respond({ok:false,error:err.message}));
+        .then(result=>respond({ok:true,result,...(result[0]?.reviewDiagnostics?{execution:result[0].reviewDiagnostics}:{})}),err=>respond({ok:false,error:err.message}));
       return true;
     }
     if (message.type === 'SPARK_FORWARD_SCREEN') {
@@ -1427,7 +2061,9 @@
     }
     return false;
   }
-  return {capabilities:['qti','text','dropdown','choice','multi','checkbox','order','textCorrection','gapWordPool','linkingLines','verified-submit'],
+  return {capabilities:['review','pronunciation','qti','text','dropdown','choice','multi','checkbox','order','textCorrection','gapWordPool','linkingLines','verified-submit'],
+    execution:()=>reviewTrace?{operationId:reviewTrace.operationId,phase:reviewTrace.phase,finished:Boolean(reviewTrace.finished),events:reviewTrace.events}:null,
+    concurrent:()=>{if(!reviewOperation)return false;reviewLog('CONCURRENT_SOLVE_ATTEMPT');return true;},
     dispatch:message=>new Promise(resolve=>handleMessage(message,null,resolve))};
 
     }

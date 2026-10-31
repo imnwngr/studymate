@@ -1,0 +1,12 @@
+{
+  "source": "spark-inspector-1.json",
+  "evidence": "Observed DOM and manual toggles only; no verified correct answers in Inspector.",
+  "title": "1e | Writing | 1",
+  "interactiveId": "bea8dba8-79f9-41d8-87f9-cea219792b3d",
+  "rootClasses": "interaction is-checkbox package package-editable editor ic-speaking-and-recording status-input",
+  "order": [1, 7, 5, 3, 4, 0, 2, 6],
+  "manualClickIndices": [1, 5, 0, 6, 4, 0, 4],
+  "observedFinalIndices": [1, 5, 6],
+  "syntheticQtiSelectedIds": ["C0_0", "C0_3", "C0_7"],
+  "syntheticQtiNotice": "These IDs are synthetic test data, not the NGL answer key. Labels are replaced with Option 1 through Option 8."
+}

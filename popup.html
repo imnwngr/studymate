@@ -11,7 +11,7 @@
 </svg>
 <main class="popup-shell"><header class="app-header"><span class="app-header-topline" aria-hidden="true"></span>
   <div class="app-identity"><img alt="" class="app-icon" src="icons/icon48.png" width="42" height="42"/><div class="app-name-group"><strong>studymate</strong><span data-i18n="appSubtitle">Your study companion</span></div></div>
-  <div class="header-side"><span class="header-version">0.8.0</span><button id="inspector" class="icon-button" type="button" title="Exercise Inspector" aria-label="Open Exercise Inspector"><svg class="ui-icon"><use href="#icon-scan"></use></svg></button><button id="scan" class="icon-button" type="button" data-i18n-title="scan" aria-label="Scan page"><svg class="ui-icon"><use href="#icon-scan"></use></svg></button><button id="settings" class="icon-button" type="button" data-i18n-title="settings" aria-label="Settings"><svg class="ui-icon"><use href="#icon-settings"></use></svg></button></div>
+  <div class="header-side"><span class="header-version">0.8.1</span><button id="inspector" class="icon-button" type="button" title="Exercise Inspector" aria-label="Open Exercise Inspector"><svg class="ui-icon"><use href="#icon-scan"></use></svg></button><button id="scan" class="icon-button" type="button" data-i18n-title="scan" aria-label="Scan page"><svg class="ui-icon"><use href="#icon-scan"></use></svg></button><button id="settings" class="icon-button" type="button" data-i18n-title="settings" aria-label="Settings"><svg class="ui-icon"><use href="#icon-settings"></use></svg></button></div>
 </header>
 <p id="siteStatus" class="site-status" role="status" aria-live="polite"></p>
 <section aria-labelledby="welcomeTitle" class="welcome-panel"><span class="glass-flare" aria-hidden="true"></span>
@@ -24,6 +24,7 @@
 </div>
 <div class="action-dock" role="group" aria-label="Exercise actions">
  <button type="button" id="auto" class="button button-primary button-hero"><svg class="ui-icon"><use href="#icon-spark"></use></svg><span data-i18n="solveFill">Solve</span><svg class="ui-icon action-arrow"><use href="#icon-arrow"></use></svg></button>
+ <button type="button" id="cancelVideo" class="button button-subtle" hidden>Cancel video</button>
  <div class="action-extras"><button type="button" id="copy" class="button button-subtle" data-i18n-title="copyPromptHint"><svg class="ui-icon"><use href="#icon-copy"></use></svg><span data-i18n="copyPrompt">Copy full exercise</span></button><button type="button" id="submitNext" class="button button-submit" disabled data-i18n-title="autoNotApplied"><svg class="ui-icon"><use href="#icon-check"></use></svg><span data-i18n="submitNext">Done &amp; next</span></button></div>
 </div>
 <section id="emptyState" class="empty-state"><strong data-i18n="emptyTitle">Your exercise will appear here</strong><p data-i18n="emptyDescription">Open an assignment on Spark, then scan the page to begin.</p></section>
@@ -35,4 +36,4 @@
 </section>
 
 <footer class="popup-footer" data-i18n="privacyFooter">Your configured provider handles API requests.</footer>
-</main><script src="core/site-registry.js"></script><script src="core/frame-access.js"></script><script src="i18n.js"></script><script src="appearance.js"></script><script src="popup.js"></script></body></html>
+</main><script src="core/site-registry.js"></script><script src="core/frame-access.js"></script><script src="i18n.js"></script><script src="appearance.js"></script><script src="video-writing.js"></script><script src="text-writing.js"></script><script src="popup.js"></script></body></html>

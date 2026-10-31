@@ -20,19 +20,16 @@ with sync_playwright() as p:
         result=page.evaluate('window.mockResult || window.mockError')
         assert isinstance(result,dict),result
         print('CASE',scenario,'reason',result['reason'],'apply',result['apply'],'done',result['done'],'second',result['secondReason'])
-        if scenario in ('unknown-unmodified','fixed-changed'):
-            assert result['reason']!='complete',result
-            assert result['done']==0,result
-        else:
-            assert result['reason']=='complete',result
-            assert result['apply'][0]['status']=='filled',result
-            assert result['finalTokens'][26]=='occupation',result
-            assert result['finalTokens'][13]=='Date',result
-            assert result['again'][0]['status']=='filled',result
-            assert result['tokens']==result['finalTokens'],result
-            assert result['done']==(5 if scenario=='fresh' else 1 if scenario=='corrupt' else 0),result
-            assert result['corrections'][0]['tokenIndex']==3,result
-            assert result['corrections'][4]['tokenIndex']==26,result
+        assert result['reason']=='complete',result
+        assert result['apply'][0]['status']=='filled',result
+        assert result['finalTokens'][26]=='occupation',result
+        assert result['finalTokens'][13]=='Date',result
+        assert result['finalTokens'][7]=='Bridge',result
+        assert result['again'][0]['status']=='filled',result
+        assert result['tokens']==result['finalTokens'],result
+        assert result['done']==(15 if scenario=='fresh' else 21 if scenario=='fixed-changed' else 20),result
+        assert result['corrections'][0]['tokenIndex']==3,result
+        assert result['corrections'][4]['tokenIndex']==26,result
         page.close()
     browser.close()
 print('QTI correction browser scenarios passed')

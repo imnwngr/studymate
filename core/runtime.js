@@ -25,7 +25,7 @@
         if(message.type==='SPARK_PING')return {ok:true,ready:true,architecture:'multisite-v1'};
         if(message.type==='SPARK_DIAGNOSTICS')return {ok:true,result:session?.execution?{...diagnostics,execution:session.execution()}:diagnostics};
         if(applying)return message.type==='SPARK_APPLY'?
-          {ok:true,result:(message.answers||[]).map(a=>({id:a.id,status:'uncertain',detail:'SOLVE_ALREADY_RUNNING'}))}:
+          {ok:true,result:(message.answers||[]).map(a=>({id:a.id,status:'uncertain',detail:'SOLVE_ALREADY_RUNNING',...(session?.concurrent?.()?{reason:'CONCURRENT_SOLVE_ATTEMPT'}:{})}))}:
           {ok:false,reason:'solveRunning',error:'Solve is still applying this interaction.'};
         const active=message.type==='SPARK_SCAN'?choose():(session||choose());
         let response;

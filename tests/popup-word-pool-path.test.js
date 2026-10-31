@@ -34,7 +34,8 @@ for(const title of ['1d | Real life | 1','1e | Writing skill | 2']){
   test('Solve click coordinator requests Apply and stops on failure: '+title,async()=>{
     const calls=[],logs=[],button={disabled:false};
     const context={state:{frameId:137,title,screenIndex:null,screenCount:null,questions:[]},
-      $:()=>button,status(){},solveDiagnostic:(...x)=>logs.push(x),
+      $:()=>button,status(){},solveDiagnostic:(...x)=>logs.push(x),errString:e=>e.message,
+      chrome:{tabs:{query:async()=>[]}},
       scanPage:async()=>{calls.push('SPARK_SCAN');return true;},
       solve:async()=>{calls.push('SPARK_QTI');return true;},
       applyAnswers:async()=>{calls.push('SPARK_APPLY');return false;},

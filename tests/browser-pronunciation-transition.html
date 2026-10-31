@@ -1,0 +1,96 @@
+<!doctype html><html><head><meta charset="utf-8"><style>.im-marking__item-button{display:inline-block;min-width:35px;min-height:25px}button{min-width:35px;min-height:25px}</style></head><body>
+<h1 class="learningObject__title">Synthetic | Pronunciation | 1</h1><div id="content_wrap_0" class="content-wrap"><div class="layout__content"></div></div>
+<script>window.chrome={runtime:{onMessage:{addListener(fn){window.request=(type,extra={})=>new Promise(resolve=>fn({type,...extra},null,response=>{if(!response.ok)throw Error(response.error);resolve(response.result);}));}}}};</script>
+<script src="/cdn_proxy/transition/data.js"></script><script src="/qti.js"></script><script src="/core/site-registry.js"></script><script src="/solvers/interactions.js"></script><script src="/solvers/sequence.js"></script><script src="/solvers/text-correction.js"></script><script src="/answer-sources/embedded-qti.js"></script><script src="/core/runtime.js"></script><script src="/adapters/ngl.js"></script><script src="/adapters/generic.js"></script><script src="/content.js"></script>
+<script>
+(async()=>{
+const groups=[['a','tch'],['cr','b'],['pl','c','d'],['e','lf'],['f','nts']],expected=[1,2,4,8,10],area=document.querySelector('.layout__content');
+const cases=[],failed=[];let config,marks,mode,log,timers=[],generation=0,resetDone=false;
+const assert=(condition,message)=>{if(!condition)throw Error(message);};
+function render(){
+ let index=0;
+ const widget=document.createElement('div');widget.className='interaction im-marking ic-speaking-and-recording';
+ widget.innerHTML='<button class="im-marking__button toggle color-f9c52a '+(mode==='mark'?'activated':'')+'">Option 1</button><button class="im-marking__button erase '+(mode==='erase'?'activated':'')+'">Eraser</button>';
+ for(const group of groups){const p=document.createElement('p');for(const label of group){
+  const item=document.createElement('span');item.className='im-marking__item markable';item.dataset.index=index;
+  item.innerHTML='<span class="im-marking__item-button"><span id="markable-content-'+generation+'-'+index+'">'+label+'</span></span>';
+  if(marks.has(index)){
+   item.classList.add('marked');if(!config.ambiguous)item.classList.add('imMarking__item--marked');
+   item.style.backgroundColor=config.paint||'#f9c52a';
+   if(config.semantic)item.append(document.createTextNode(config.whitespace?'Marked\n as  Option\n 1.':'Marked as Option '+(config.wrongOption?2:1)+'.'));
+   if(config.conflicting)item.append(document.createTextNode('Marked as Option 2.'));
+   if(config.malformed)item.append(document.createTextNode('Marked as Option ?.'));
+  }
+  p.append(item);index++;
+ }widget.append(p);}
+ area.replaceChildren(widget);generation++;
+ if(config.clickThrows)widget.querySelectorAll('.im-marking__item-button').forEach(button=>button.click=()=>{throw Error('synthetic dispatch failure');});
+}
+area.addEventListener('click',event=>{
+ const control=event.target.closest('.im-marking__button');
+ if(control){mode=control.classList.contains('erase')?'erase':'mark';log.push(mode);if(mode==='mark'){assert(resetDone||marks.size===0,'mark mode before empty reset');resetDone=true;}render();return;}
+ const button=event.target.closest('.im-marking__item-button');if(!button)return;
+ const index=Number(button.parentElement.dataset.index),phase=mode;log.push(phase+':'+index);
+ const update=()=>{if(phase==='erase')marks.delete(index);else{assert(resetDone,'mark before reset');marks.add(index);if(config.deactivate)mode='erase';}render();
+  if(config.targetChanges&&phase==='mark')area.querySelector('[id^="markable-content-"]').textContent='changed';};
+ if(config.timeout&&phase==='mark')return;
+ if(config.delay&&phase==='mark'){render();timers.push(setTimeout(update,config.delay));}else update();
+});
+const solve=async()=>{
+ await request('SPARK_SCAN');const qti=await request('SPARK_QTI',{ids:['q1']});
+ assert(qti.answers[0]?.targets.length===5,'five trusted targets unavailable');
+ assert(qti.answers[0].answer==='tch | cr | pl | lf | nts','wrong QTI answer');
+ return (await request('SPARK_APPLY',{answers:[{id:'q1',answer:qti.answers[0].answer}]}))[0];
+};
+const scenarios=[
+ {name:'parent classes only; clickable child unchanged'},
+ {name:'CSS Color 4 representation',paint:'color(srgb 0.9764705882 0.7725490196 0.1647058824)'},
+ {name:'alpha yellow with NGL option annotation',paint:'rgba(249,197,42,.35)',semantic:true},
+ {name:'alpha yellow without annotation',paint:'rgba(249,197,42,.35)'},
+ {name:'transparent background with NGL option annotation',paint:'transparent',semantic:true},
+ {name:'composited background with NGL option annotation',paint:'#fdf3d5',semantic:true},
+ {name:'option annotation whitespace normalized',paint:'transparent',semantic:true,whitespace:true},
+ {name:'delayed parent transition beyond 400ms',delay:650},
+ {name:'immediate rerender after every click'},
+ {name:'mark confirmation independent of toolbar activation',deactivate:true,semantic:true},
+ {name:'incorrect marks reset before five delayed targets',initial:[0,3,5,6,7,9],delay:650,semantic:true},
+ {name:'already correct resets and repeated Solve',initial:expected,semantic:true},
+ {name:'wrong option despite yellow paint',semantic:true,wrongOption:true,failure:'OPTION_MISMATCH'},
+ {name:'conflicting option annotations',semantic:true,conflicting:true,failure:'OPTION_MISMATCH'},
+ {name:'malformed option annotation',malformed:true,failure:'AMBIGUOUS_MARKED_STATE'},
+ {name:'transparent background without option identity',paint:'transparent',failure:'AMBIGUOUS_MARKED_STATE'},
+ {name:'wrong color without option identity',paint:'#000000',failure:'COLOR_MISMATCH'},
+ {name:'ambiguous parent state',ambiguous:true,failure:'AMBIGUOUS_MARKED_STATE'},
+ {name:'transition timeout',timeout:true,failure:'DOM_TRANSITION_TIMEOUT'},
+ {name:'target changes after click',targetChanges:true,failure:'TARGET_MISMATCH'},
+ {name:'click dispatch throws',clickThrows:true,failure:'CLICK_FAILED'}
+];
+for(config of scenarios){
+ mode='mark';marks=new Set(config.initial||[]);log=[];resetDone=false;render();
+ try{
+  const result=await solve();
+  if(config.failure){
+   assert(result.status!=='filled','incomplete solve reported success');
+   assert(result.reason===config.failure,'expected '+config.failure+' got '+JSON.stringify(result));
+   assert(result.group===1&&result.segment===2,'failed target diagnostic missing');
+   assert(log.filter(s=>s==='mark:1').length===(config.clickThrows?0:1),'failed target clicked repeatedly');
+   assert(!log.includes('mark:2'),'continued after failure');
+  }else{
+   assert(result.status==='filled','five-target solve failed: '+JSON.stringify(result));
+   assert(JSON.stringify([...marks].sort((a,b)=>a-b))===JSON.stringify(expected),'exact final set differs');
+   assert(log.filter(s=>s.startsWith('mark:')).join(',')===expected.map(i=>'mark:'+i).join(','),'duplicate or missing clicks');
+   assert(log.filter(s=>s.startsWith('erase:')).length===(config.initial||[]).length,'reset incomplete');
+   assert([...area.querySelectorAll('.im-marking__item-button')].every(n=>!n.classList.contains('marked')),'fixture must only mark parent');
+   if(config.name.includes('repeated Solve')){
+    log=[];resetDone=false;const again=await solve();assert(again.status==='filled','repeat failed');
+    assert(log.filter(s=>s.startsWith('erase:')).length===5,'repeat skipped reset');
+    assert(log.filter(s=>s.startsWith('mark:')).length===5,'repeat did not mark five once');
+   }
+  }
+  cases.push(config.name);
+ }catch(error){failed.push({name:config.name,error:String(error.message)});}
+ timers.forEach(clearTimeout);timers=[];
+}
+document.body.append(Object.assign(document.createElement('pre'),{id:'test-result',textContent:JSON.stringify({passed:cases.length,cases,failed})}));
+})().catch(error=>document.body.append(Object.assign(document.createElement('pre'),{id:'test-error',textContent:error.stack||String(error)})));
+</script></body></html>

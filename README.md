@@ -2,7 +2,7 @@
 <h1 align="center">studymate</h1>
 <p align="center"><strong>Review the exercise. Apply with evidence.</strong></p>
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.8.0-555555?style=flat-square" alt="Version 0.8.0">
+  <img src="https://img.shields.io/badge/version-0.8.1-555555?style=flat-square" alt="Version 0.8.1">
   <img src="https://img.shields.io/badge/browser-Chrome-555555?style=flat-square" alt="Chrome">
   <img src="https://img.shields.io/badge/extension-Manifest_V3-555555?style=flat-square" alt="Manifest V3">
 </p>
@@ -97,7 +97,7 @@ Set-Location studymate
 3. Inspect actual results. Let Word Pool finish resetting and filling before interacting again.
 4. Use **Done & next** only when enabled and when you intend to submit. NGL can advance within an activity after verification gates pass; a changed button does not prove saved grades.
 
-**Updating:** pull source, reload the extension, then refresh exercise tabs. If its directory was renamed, load the new location and review permissions/settings. Version 0.8.0 does not imply a Chrome Web Store listing or GitHub Release.
+**Updating:** pull source, reload the extension, then refresh exercise tabs. If its directory was renamed, load the new location and review permissions/settings. Version 0.8.1 does not imply a Chrome Web Store listing or GitHub Release.
 
 <a id="privacy"></a>
 ## Privacy, permissions and limits

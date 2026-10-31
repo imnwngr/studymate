@@ -78,6 +78,7 @@ function addProfile(provider){
   if(state.profiles.length>=P.MAX_PROFILES){message(t('maxProfiles'),true);return;}
   const p=P.newProfile(provider);
   state.profiles.push(p);state.editingId=p.id;
+  if(provider==='gemini' && state.aiMode==='offline'){state.aiMode='single';state.activeProfileId=p.id;}
   if(!state.activeProfileId)state.activeProfileId=p.id;
   render();markDirty();
   $('profileEditor').scrollIntoView({behavior:'smooth',block:'nearest'});
@@ -152,6 +153,18 @@ $('toggleKey').addEventListener('click',()=>{
   const input=$('apiKey');input.type=input.type==='password'?'text':'password';
   const show=input.type==='password';$('toggleKey').textContent=show?t('show'):t('hide');
   $('toggleKey').setAttribute('aria-label',show?t('show')+' API key':t('hide')+' API key');
+});
+$('testConnection').addEventListener('click',async()=>{
+  const button=$('testConnection'), status=$('connectionStatus');
+  button.disabled=true;status.textContent='Connecting…';
+  try {
+    const profile=P.validateProfile(editing());
+    const granted=await chrome.permissions.request({origins:[P.originPattern(profile.endpoint)]});
+    if(!granted)throw new Error(t('permissionsDenied'));
+    const result=await chrome.runtime.sendMessage({type:'SPARK_TEST_PROVIDER',profile});
+    status.textContent=result?.ok?'Connected':(result?.error||'Connection failed.');
+  } catch(error){status.textContent=error?.message||'Connection failed.';}
+  finally{button.disabled=false;}
 });
 $('save').addEventListener('click',async()=>{
   const button=$('save');button.disabled=true;

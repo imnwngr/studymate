@@ -42,7 +42,7 @@ with sync_playwright() as p:
         assert result['qti'] == 'complete', result
         if not missing_ok:
             assert result['apply'][0]['status'] == 'filled', result
-            assert result['done'] == 5, result
+            assert result['done'] == 15, result
             assert result['again'][0]['status'] == 'filled', result
             assert result['tokens'] == ['Surname', 'Date', 'Gender', 'Country', 'occupation'], result
             assert result['tokensAfter'] == result['tokens'], result

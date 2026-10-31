@@ -101,7 +101,7 @@ test('all established interaction families have a shared solver and unknown type
 test('manifest preserves least privilege and installs one ordered multi-frame runtime',()=>{
   const m=JSON.parse(source('manifest.json'));
   const baseline=JSON.parse(source('docs/agent-state/multisite-baseline.json'));
-  assert.equal(m.version,'0.8.0');assert.ok(baseline.hashes['manifest.json']);
+  assert.equal(m.version,'0.8.1');assert.ok(baseline.hashes['manifest.json']);
   assert.ok(m.permissions.includes('activeTab'));assert.ok(m.permissions.includes('scripting'));
   assert.ok(!m.host_permissions.includes('<all_urls>'));assert.ok(!m.host_permissions.includes('https://*/*'));
   assert.equal(m.content_scripts[0].all_frames,true);assert.ok(m.content_scripts[0].js.includes('inspector-content.js'));
@@ -135,6 +135,6 @@ test('shared correction algorithm validates each intermediate position through e
   const result=await ctx.SparkSolvers.solve('textCorrection',{
     correctionNorm:x=>String(x),visible:()=>true,available:()=>true,tokens:()=>tokens,modified:()=>false,
     editorOpen:()=>false,open(){},popup:async()=>({}),confirm:async(target,value)=>{target.textContent=value;return true;}
-  },{corrections:[{from:'Wrong',to:'Right',tokenIndex:0}]});
+  },{corrections:[{from:'Wrong',to:'Right',tokenIndex:0,sentence:0,sentenceTokenIndex:0}],originals:[{text:'Wrong',tokenIndex:0,sentence:0,sentenceTokenIndex:0},{text:'Stable',tokenIndex:1,sentence:0,sentenceTokenIndex:1}]});
   assert.equal(result.status,'filled');assert.equal(tokens[0].textContent,'Right');assert.equal(tokens[1].textContent,'Stable');
 });

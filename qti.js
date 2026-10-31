@@ -99,7 +99,61 @@
     return possibilities.some(labels=>Array.isArray(labels)&&labels.length===sourceLabels.length&&
       labels.every(label=>norm(label))&&labels.map(norm).sort().join('\0')===expected);
   }
+  function mapStructuredCorrection(xml,q){
+    const fail=reason=>({answers:[],total:1,reason:'UNSUPPORTED',diagnostics:[reason]});
+    const body=descendants(xml,'itemBody')[0],interactions=interactionNodes(xml);
+    const declarations=declaredResponses(xml);
+    const rubric=descendants(body,'div').find(n=>attr(n,'id')==='rubric');
+    if(!/correct\s+(?:the\s+)?\w*\s*errors?/.test(norm(rubric?.textContent||body?.textContent)) ||
+      !interactions.length||interactions.length>20||interactions.some(n=>name(n)!=='inlineChoiceInteraction')||declarations.diagnostics.length)
+      return fail('correctionStructureUnsupported');
+    const content=descendants(body,'div').find(n=>attr(n,'id')==='content');
+    const paragraphs=content?descendants(content,'p'):descendants(body,'p').filter(p=>descendants(p,'inlineChoiceInteraction').length);
+    if(paragraphs.length!==q.correctionGroups.length)return fail('correctionSentenceCountMismatch');
+    const edits=[],originals=[],seen=new Set();let offset=0;
+    const split=value=>String(value||'').match(/[\p{L}\p{N}]+(?:['’\-][\p{L}\p{N}]+)*/gu)||[];
+    for(let sentence=0;sentence<paragraphs.length;sentence++){
+      const sequence=[];
+      const visit=node=>{
+        if(node.nodeType===3||node.nodeType===4){sequence.push(...split(node.nodeValue));return;}
+        if(name(node)==='inlineChoiceInteraction'){sequence.push(node);return;}
+        if(node.childNodes?.length)for(const childNode of node.childNodes)visit(childNode);
+        else if(node.children?.length){if(node.text)sequence.push(...split(node.text));for(const childNode of node.children)visit(childNode);}
+        else if(node.text)sequence.push(...split(node.text));
+      };
+      visit(paragraphs[sentence]);
+      const visible=q.correctionGroups[sentence];
+      if(!Array.isArray(visible)||visible.length!==sequence.length)return fail('correctionSentenceShapeMismatch');
+      for(let sentenceTokenIndex=0;sentenceTokenIndex<sequence.length;sentenceTokenIndex++){
+        const node=sequence[sentenceTokenIndex],tokenIndex=offset+sentenceTokenIndex;
+        const position={sentence,sentenceTokenIndex,tokenIndex};
+        if(typeof node==='string'){
+          originals.push({...position,text:node});
+          continue;
+        }
+        const responseId=attr(node,'responseIdentifier'),declaration=declarations.map.get(responseId);
+        const options=children(node,'inlineChoice').map(c=>({id:attr(c,'identifier'),label:clean(c.textContent)}));
+        if(seen.has(responseId)||!responseId||!declaration||declaration.baseType!=='string'||declaration.cardinality!=='single'||
+          declaration.values.length!==1||options.length<2||options.length>8||
+          options.some(o=>!o.id||!o.label||/[|]/.test(o.label))||new Set(options.map(o=>o.id)).size!==options.length)
+          return fail('correctionDeclarationAmbiguous');
+        seen.add(responseId);
+        const original=options.find(o=>o.id===declaration.values[0]);
+        const alternatives=options.filter(o=>o!==original).map(o=>o.label);
+        if(!original||!alternatives.length||new Set(alternatives).size!==alternatives.length||alternatives.includes(original.label))
+          return fail('correctionAlternativesAmbiguous');
+        originals.push({...position,text:original.label});
+        edits.push({from:original.label,to:alternatives[0],alternatives,
+          responseId,sentence,sentenceTokenIndex,tokenIndex,anchorVerified:true});
+      }
+      offset+=sequence.length;
+    }
+    if(edits.length!==interactions.length||seen.size!==declarations.map.size)return fail('correctionMappingIncomplete');
+    return {answers:[{id:q.id,answer:edits.map(e=>e.from+' → '+e.to).join(' ; '),source:'qti',confidence:'high',
+      correctionVerified:true,originals,corrections:edits}],total:1,reason:'complete',diagnostics:[]};
+  }
   function mapTextCorrection(xml,q){
+    if(Array.isArray(q.correctionGroups))return mapStructuredCorrection(xml,q);
     const fail=reason=>({answers:[],total:1,reason,diagnostics:[reason]});
     const prompt=norm(child(xml.getElementsByTagName('itemBody')[0],'div')?.textContent||
       descendants(xml,'itemBody')[0]?.textContent||'');
@@ -157,7 +211,45 @@
       explanation:'Validated word-correction alternatives from published QTI; Spark UI must confirm changes.'}],
       total:1,interactions:interactions.length,reason:'complete',diagnostics:[]};
   }
+  function mapPronunciation(xml,q){
+    const fail=reason=>({answers:[],total:1,reason,diagnostics:[reason]});
+    if(attr(xml.documentElement||xml,'identifier')!=='Identify:Mark:Marking' || !q.applyable)
+      return fail('UNSUPPORTED_MARKING');
+    const interactions=interactionNodes(xml),{map,diagnostics}=declaredResponses(xml);
+    if(diagnostics.length||interactions.length!==1||name(interactions[0])!=='gapMatchInteraction')
+      return fail('UNSUPPORTED_MARKING_STRUCTURE');
+    const interaction=interactions[0],options=children(interaction,'gapText');
+    const declaration=map.get(attr(interaction,'responseIdentifier'));
+    if(options.length!==1||!/^#[0-9a-f]{6}$/i.test(attr(options[0],'style')) ||
+      !declaration||declaration.baseType!=='identifier'||declaration.cardinality!=='ordered'||declaration.values.length!==1)
+      return fail('UNSUPPORTED_MARKING_DECLARATION');
+    const optionId=attr(options[0],'identifier'),color=attr(options[0],'style').toLowerCase();
+    // Marking uses one ordered value: option identifier followed by all its gap identifiers.
+    const values=declaration.values[0].split(/\s+/),gaps=descendants(interaction,'gap');
+    const groups=descendants(interaction,'p').map(p=>descendants(p,'gap')).filter(g=>g.length);
+    const visible=q.markingGroups;
+    if(!optionId||values.shift()!==optionId||!values.length||new Set(values).size!==values.length||
+      !gaps.length||gaps.length>100||new Set(gaps.map(g=>attr(g,'identifier'))).size!==gaps.length||
+      gaps.some(g=>!attr(g,'identifier'))||groups.flat().length!==gaps.length||
+      !Array.isArray(visible)||visible.length!==groups.length||q.markingColor!==color)
+      return fail('UNSUPPORTED_MARKING_MAPPING');
+    const targets=[];
+    for(let group=0;group<groups.length;group++){
+      if(!Array.isArray(visible[group])||visible[group].length!==groups[group].length)
+        return fail('MARKING_GROUP_MISMATCH');
+      for(let segment=0;segment<groups[group].length;segment++){
+        const gap=groups[group][segment],label=clean(attr(gap,'label'));
+        if(!label||label!==clean(visible[group][segment]))return fail('MARKING_SEGMENT_MISMATCH');
+        if(values.includes(attr(gap,'identifier')))targets.push({group,segment,gapId:attr(gap,'identifier'),optionId,color});
+      }
+    }
+    if(targets.length!==values.length)return fail('MARKING_ANSWER_MISSING');
+    return {answers:[{id:q.id,answer:targets.map(t=>visible[t.group][t.segment]).join(' | '),
+      source:'qti',confidence:'high',markingVerified:true,targets}],total:1,reason:'complete',diagnostics:[]};
+  }
   function mapAssessment(xml,questions){
+    if(Array.isArray(questions)&&questions.length===1&&questions[0]?.kind==='pronunciation')
+      return mapPronunciation(xml,questions[0]);
     if(Array.isArray(questions)&&questions.length===1&&questions[0]?.kind==='textCorrection')
       return mapTextCorrection(xml,questions[0]);
     const diagnostics=[],interactions=interactionNodes(xml),{map:declared,diagnostics:declErrors}=declaredResponses(xml);
@@ -177,7 +269,7 @@
         const tag=type==='inlineChoiceInteraction'?'inlineChoice':'simpleChoice';
         const options=children(el,tag).map(x=>({id:attr(x,'identifier'),label:clean(x.textContent)}));
         const ids=options.map(x=>x.id),labels=options.map(x=>norm(x.label));
-        if(options.length<2||ids.some(x=>!x)||new Set(ids).size!==ids.length||labels.some(x=>!x)||new Set(labels).size!==labels.length){fail('choiceMismatch');continue;}
+        if(options.length<2||ids.some(x=>!x)||new Set(ids).size!==ids.length||labels.some(x=>!x)||(!q.reviewIdentity&&new Set(labels).size!==labels.length)){fail('choiceMismatch');continue;}
         if(type==='inlineChoiceInteraction'){
           if(options.length!==q.options?.length ||
              labels.slice().sort().join('\u0000')!==q.options.map(norm).sort().join('\u0000')){fail('choiceMismatch');continue;}
@@ -331,6 +423,7 @@
   function signatureScore(xml,questions){
     const its=interactionNodes(xml);
     if(questions.length===1&&questions[0]?.kind==='textCorrection'){
+      if(Array.isArray(questions[0].correctionGroups))return mapStructuredCorrection(xml,questions[0]).answers.length?1:0;
       if(!its.length || its.some(el=>name(el)!=='inlineChoiceInteraction'))return 0;
       const declarations=declaredResponses(xml).map;
       const visible=(questions[0].correctionTokens||[]).map(correctionNorm);
@@ -389,14 +482,45 @@
     }
     return available?total/available:0;
   }
+  function mapReview(source,q,parser){
+    const fail=(reason,group=null)=>({answers:[],total:1,reason:'UNSUPPORTED',diagnostics:[group===null?reason:'group'+group+':'+reason],group});
+    const groups=q.reviewGroups;
+    if(!q.applyable)return fail(q.reviewFailure?.reason||'reviewInventoryIncomplete',q.reviewFailure?.group??null);
+    if(!Array.isArray(groups)||groups.length<2||groups.length>20)return fail('reviewInventoryIncomplete');
+    const files=assessmentsFromDataJs(source,parser),manifests=[];
+    const regex=/"LearningObjectInfo\.xml"\s*:\s*("(?:\\.|[^"\\])*")/g;let match;
+    while((match=regex.exec(source))!==null){try{const text=JSON.parse(match[1]);if(text.length>MAX_XML||/<!DOCTYPE|<!ENTITY/i.test(text))return fail('unsafeManifest');
+      const xml=parser.parseFromString(text,'application/xml');if(descendants(xml,'parsererror').length)return fail('invalidManifest');manifests.push(xml);}catch{return fail('invalidManifest');}}
+    if(manifests.length!==1)return fail('reviewManifestMissingOrAmbiguous');
+    const names=children(child(manifests[0].documentElement,'screens'),'screen').map(n=>clean(child(n,'name')?.textContent));
+    if(names.length!==groups.length||names.some(n=>!n)||new Set(names).size!==names.length)return fail('reviewScreenCountMismatch');
+    const mapped=[];
+    for(let index=0;index<groups.length;index++){
+      const candidates=files.filter(f=>f.filename===names[index]);
+      if(candidates.length!==1)return fail('reviewAssessmentMissingOrAmbiguous',index);
+      const group=groups[index],xml=candidates[0].xml;
+      const types={choice:'Identify:Select:Radiobutton',checkbox:'Identify:Select:Checkbox',text:'Input:Completion:Text gap',dropdown:'Identify:Select:Dropdown'};
+      if(attr(xml.documentElement,'identifier')!==types[group.kind])return fail('reviewInteractionTypeMismatch',index);
+      const result=mapAssessment(xml,group.questions);
+      if(result.reason!=='complete'||result.answers.length!==group.questions.length||declaredResponses(xml).diagnostics.length)
+        return fail('reviewAnswerMappingIncomplete:'+result.diagnostics.join(','),index);
+      mapped.push({index,kind:group.kind,filename:names[index],answers:result.answers});
+    }
+    return {answers:[{id:q.id,answer:mapped.map(g=>'Section '+(g.index+1)+': '+g.answers.map(a=>a.answer).join(' ; ')).join(' | '),
+      source:'qti',confidence:'high',reviewVerified:true,groups:mapped}],total:1,reason:'complete',diagnostics:[],
+      groupCount:mapped.length,responseCount:mapped.reduce((n,g)=>n+g.answers.length,0)};
+  }
   function fromDataJs(source,questions,parser){
     if(typeof source!=='string'||source.length>MAX_SOURCE||!parser?.parseFromString)
       return {answers:[],total:questions?.length||0,reason:'invalidData',diagnostics:[]};
+    if(questions?.length===1&&questions[0]?.kind==='review')return mapReview(source,questions[0],parser);
     const files=assessmentsFromDataJs(source,parser);
     if(!files.length)return {answers:[],total:questions?.length||0,reason:'noAssessment',diagnostics:[]};
     const candidates=files.map(f=>({...f,mapped:mapAssessment(f.xml,questions),signature:signatureScore(f.xml,questions)}));
     const viable=candidates.filter(f=>f.mapped.answers.length &&
       !(questions.length===1&&questions[0]?.kind==='gapWordPool'&&f.signature<0.55));
+    if(questions.length===1&&['pronunciation','textCorrection'].includes(questions[0]?.kind)&&viable.length>1)
+      return {answers:[],total:1,reason:'ambiguousAssessment',diagnostics:[questions[0].kind==='textCorrection'?'multipleCorrectionAssessments':'multipleMarkingAssessments']};
     if(!viable.length)return {...candidates[0].mapped,answers:[],reason:'noMapping',format:'QTI'};
     viable.sort((a,b)=>b.mapped.answers.length-a.mapped.answers.length||b.signature-a.signature);
     const best=viable[0],runner=viable[1];
