@@ -108,6 +108,41 @@ function recordingFixture(extra=[]){
  root.querySelectorAll=s=>s==='video'?[]:s==='.interaction.ic-speaking-and-recording'?[recording]:[recording,...extra];return {root,recording};
 }
 test('editor-only Recording wrapper needs no category exception',()=>{recordingFixture();const x=D.inspect();assert.equal(x.found,true);assert.equal(x.allowAuxRecording,undefined);assert.match(x.exercise,/Design a form/)});
+test('formatted checklist text in a Writing wrapper permits the editor while an interactive descendant blocks it',()=>{
+ const {recording}=recordingFixture();
+ const strong=el('strong');
+ strong.attributes=[];strong.classList=[];strong.classList.contains=name=>strong.classList.includes(name);
+ recording.querySelectorAll=()=>[strong];
+ assert.equal(D.inspect().found,true);
+ const button=el('button');
+ recording.querySelectorAll=()=>[strong,button];
+ assert.equal(D.inspect().reason,'SPECIALIZED_INTERACTION');
+});
+test('a story uses only the learner draft from the named earlier screen',()=>{
+ const {root,frame}=fixture();
+ const previous=el('div',[t('Unrelated sample in the first screen')],{id:'content_wrap_0',hidden:true});
+ const body=el('body',[el('p',[t('a An island.'),el('br'),t('b A storm.')])]);
+ const editor=el('iframe');
+ editor.contentDocument={body};
+ let earlierEditors=[editor];
+ previous.querySelectorAll=s=>s.startsWith('iframe')?earlierEditors:[];
+ let instruction='Write a story using your plan from Screen 1.';
+ root.querySelector=s=>s==='.layout__rubric'?{innerText:instruction}:null;
+ document.querySelectorAll=s=>s==='.content-wrap'?[previous,root]:s.startsWith('iframe')?[frame]:[];
+ const first=D.inspect();
+ assert.equal(first.found,true);
+ assert.match(first.exercise,/a An island\.\s*\n\s*b A storm\./);
+ assert.doesNotMatch(first.exercise,/Unrelated sample/);
+ body.childNodes=[el('p',[t('An edited outline.')])];
+ assert.match(D.inspect().exercise,/An edited outline\./);
+ earlierEditors=[editor,editor];
+ assert.match(D.inspect().error,/WRITING_REFERENCE_MISSING/);
+ earlierEditors=[editor];
+ body.childNodes=[el('p',[el('br')])];
+ assert.match(D.inspect().error,/WRITING_REFERENCE_MISSING/);
+ instruction='Review your outline on Screen 2.';
+ assert.match(D.inspect().error,/WRITING_REFERENCE_MISSING/);
+});
 test('principal pronunciation marking remains blocked even in confirmed Writing context',()=>{const f=recordingFixture();f.recording.matches=s=>s==='.interaction.ic-speaking-and-recording'||s==='.im-marking';assert.equal(D.inspect({allowAuxRecording:true}).reason,'SPECIALIZED_INTERACTION')});
 test('recording without Writing instructions remains ineligible',()=>{const f=recordingFixture();f.root.childNodes=[el('p',[t('Record your pronunciation.')])];assert.equal(D.inspect({allowAuxRecording:true}).reason,'WRITING_INSTRUCTION_NOT_FOUND')});
 for(const selector of ['[role="radio"]','[role="checkbox"]','[role="combobox"]','.interaction.om-text-gap','.interaction.is-linking-lines'])test('confirmed Writing still blocks '+selector,()=>{const other=el('div');other.matches=s=>s===selector;other.closest=()=>null;recordingFixture([other]);assert.equal(D.inspect({allowAuxRecording:true}).reason,'SPECIALIZED_INTERACTION')});

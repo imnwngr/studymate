@@ -2,8 +2,10 @@
  'use strict';
  function inspect(options={}){
    const visible=e=>{for(let n=e;n&&n.nodeType===1;n=n.parentElement){let s=getComputedStyle(n);if(n.hidden||n.hasAttribute('inert')||n.getAttribute('aria-hidden')==='true'||s.display==='none'||s.visibility==='hidden')return false;}return true;};
-   const roots=[...document.querySelectorAll('.content-wrap')].filter(visible);
-   const editors=[...document.querySelectorAll('iframe.cke_wysiwyg_frame,iframe[title^="Rich Text Editor"]')].filter(visible);
+   const screens=[...document.querySelectorAll('.content-wrap')];
+   const roots=screens.filter(visible);
+   const editorSelector='iframe.cke_wysiwyg_frame,iframe[title^="Rich Text Editor"]';
+   const editors=[...document.querySelectorAll(editorSelector)].filter(visible);
    const chartReference=Symbol.for('studymate.writing.chart');
    if(!editors.length){
      const page=roots.length===1?roots[0]:null;
@@ -25,7 +27,7 @@
    function editorWrapper(widget){
      if(widget.closest('.content-wrap')!==scope||!widget.contains(editors[0])||widget.matches('.im-marking')||
        [...scope.querySelectorAll(recording)].filter(visible).length!==1)return false;
-     const passive=new Set(['DIV','SPAN','SECTION','ARTICLE','P','LABEL','UL','OL','LI','BR','H1','H2','H3','H4','H5','H6']);
+     const passive=new Set(['DIV','SPAN','SECTION','ARTICLE','P','LABEL','UL','OL','LI','BR','H1','H2','H3','H4','H5','H6','STRONG','EM','B','I']);
      try{
        for(const node of [widget,...widget.querySelectorAll('*')]){
          if(node.srcObject)return false;
@@ -74,24 +76,38 @@
      catch{return {found:true,error:'WRITING_MEDIA_URL: Không tìm thấy URL video HTTPS.'};}
    }
    const skip='nav,header,footer,button,script,style,textarea,input,select,iframe,.cke,.cke_dialog,[role="navigation"],[role="toolbar"],[contenteditable="true"],.navigation,.toolbar';
-   const parts=[];const blocks=new Set(['P','DIV','SECTION','ARTICLE','H1','H2','H3','H4','H5','H6','LI','TR','BR']);
-   function walk(node){
+   const blocks=new Set(['P','DIV','SECTION','ARTICLE','H1','H2','H3','H4','H5','H6','LI','TR','BR']);
+   function walk(node,parts){
      if(node.nodeType===3){const t=node.nodeValue.replace(/\s+/g,' ');if(t)parts.push(t);return;}
      if(node.nodeType!==1||!visible(node)||node.matches(skip))return;
      const block=blocks.has(node.tagName);if(block)parts.push('\n');
      if(node.tagName==='LI')parts.push('- ');
      if(node.tagName==='TD'||node.tagName==='TH')parts.push(' | ');
-     for(const child of node.childNodes)walk(child);
+     for(const child of node.childNodes)walk(child,parts);
      if(block)parts.push('\n');
    }
-   walk(scope);
-   let exercise=parts.join('').replace(/[ \t]+\n/g,'\n').replace(/\n[ \t]+/g,'\n').replace(/\n{3,}/g,'\n\n').trim();
+   function readText(nodes){
+     const parts=[];
+     for(const node of nodes)walk(node,parts);
+     return parts.join('').replace(/[ \t]+\n/g,'\n').replace(/\n[ \t]+/g,'\n').replace(/\n{3,}/g,'\n\n').trim();
+   }
+   let exercise=readText([scope]);
    if(!exercise)return {found:true,error:'Không trích xuất được nội dung đề bài viết.'};
    const writingTask=/\b(?:write|design|describe|create|draft|compose|paragraph|form)\b/i.test(exercise);
    const videoTask=videos.length===1&&/\b(?:video|watch|film|clip)\b/i.test(exercise)&&
      /\b(?:answer|summarize|summarise|analyze|analyse|description)\b/i.test(exercise);
    if(!writingTask&&!videoTask)return {found:false,reason:'WRITING_INSTRUCTION_NOT_FOUND'};
    const rubric=scope.querySelector?.('.layout__rubric')?.innerText||'';
+   const planRef=rubric.match(/\byour\s+(plan|outline)\s+(?:on|from)\s+screen\s+(\d+)\b/i);
+   if(planRef){
+     const screen=Number(planRef[2]),current=scope.id.match(/^content_wrap_(\d+)$/);
+     const prior=screens.filter(node=>node.id==='content_wrap_'+(screen-1));
+     const fields=current&&screen>0&&screen<=Number(current[1])&&prior.length===1?prior[0].querySelectorAll(editorSelector):[];
+     const body=fields.length===1?fields[0].contentDocument?.body:null;
+     const plan=body?readText(body.childNodes):'';
+     if(!plan)return {found:true,error:'WRITING_REFERENCE_MISSING: Không đọc được dàn ý đã viết ở màn '+screen+'.'};
+     exercise+='\n\nYour '+planRef[1].toLowerCase()+' from Screen '+screen+'\n'+plan;
+   }
    const referenced=rubric.match(/\b(?:chart|graph)\s+(?:on|from)\s+screen\s+(\d+)\b/i);
    if(referenced){
      const chart=document[chartReference],screen=Number(referenced[1]);
