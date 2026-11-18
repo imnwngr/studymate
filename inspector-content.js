@@ -166,6 +166,22 @@
     },delay);pendingTimers.add(timer);
   }
 
+  function visibleScore() {
+    const dialogs = [...document.querySelectorAll('dialog[open], [role="dialog"], [role="alertdialog"]')]
+      .filter(dialog => isVisible(dialog) && !dialog.closest('[inert], [aria-hidden="true"]'));
+    const scores = [];
+    for (const dialog of dialogs) {
+      const text = clean(dialog.innerText, 600);
+      const match = /^Score:\s*(\d+(?:\.\d+)?)\s+out of\s+(\d+(?:\.\d+)?)\s+correct\b/i.exec(text);
+      if (!match) continue;
+      const earned = Number(match[1]), total = Number(match[2]);
+      if (!Number.isFinite(total) || total <= 0 || earned > total) continue;
+      const attempts = /\b(\d+)\s+attempts?\s+left\b/i.exec(text);
+      scores.push({earned, total, attemptsLeft: attempts ? Number(attempts[1]) : null});
+    }
+    return scores.length === 1 ? scores[0] : null;
+  }
+
   function capture() {
     const counts = Object.fromEntries(selectors.map(selector => [selector, document.querySelectorAll(selector).length]));
     const interactions = [...document.querySelectorAll('.interaction')].slice(0, 45).map((el, index) => ({
@@ -187,6 +203,7 @@
       deepSchema:1,frame:frameEvidence(),deepInteractions:deepState(),responseDeclarations:declarations(),
       title: clean(document.title), url: safeUrl(), counts, interactions, controls, qtiNodes, wordPools,
       summary: {
+        visibleScore: visibleScore(),
         types: [...new Set(interactions.map(item => item.classes.split(' ').find(token => /^(is-|ic-|os-|pp-)/.test(token))).filter(Boolean))],
         interactionCount: counts['.interaction'],
         visibleInputTypes: [...new Set([...document.querySelectorAll('.interaction input')].map(input => input.type || 'text'))].slice(0,12)

@@ -61,6 +61,30 @@ function harness(options={}){
 test('content capture records nested accessible frames, bounded structured pool/target state and no raw HTML',()=>{
  const h=harness(),c=h.send('CAPTURE').result;assert.equal(c.deepSchema,1);assert.equal(c.frame.ancestry.length,2);assert.equal(c.frame.complete,true);assert.equal(c.deepInteractions[0].sources[0].text,'alpha');assert.equal(c.deepInteractions[0].destinations[0].occupancy.emptyClass,true);assert.equal(c.interactions[0].html,null);assert.equal(c.controls.length,0);
 });
+test('manual capture reads the displayed score and remaining attempts together',()=>{
+ const h=harness();
+ function addDialog(text){
+   const el=h.html.add(new h.El('div','',''));
+   const matches=el.matches.bind(el);
+   el.matches=selector=>selector.includes('[role="dialog"]')||matches(selector);
+   el.innerText=text;
+   return el;
+ }
+ const read=()=>h.send('CAPTURE').result.summary.visibleScore;
+ const dialog=addDialog('Score:\n4.5 out of 5\ncorrect\nYou have\n1 attempt left.');
+ assert.deepEqual({...read()},{earned:4.5,total:5,attemptsLeft:1});
+ const second=addDialog('Score: 2 out of 3 correct.');
+ assert.equal(read(),null);
+ second.getClientRects=()=>[];
+ dialog.innerText='Score: 0 out of 5 correct. You have 0 attempts left.';
+ assert.equal(read().attemptsLeft,0);
+ dialog.innerText='Score: 1 out of 5 correct.';
+ assert.equal(read().attemptsLeft,null);
+ dialog.innerText='Score: 6 out of 5 correct.';
+ assert.equal(read(),null);
+ dialog.innerText='Example score: 1 out of 5 correct.';
+ assert.equal(read(),null);
+});
 test('sorting feedback is recorded only for a single visible, unambiguous mark',()=>{
  const h=harness();
  h.root.className='interaction os-sorting';
