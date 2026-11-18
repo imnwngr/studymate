@@ -38,6 +38,60 @@ test('isolated detector chooses content frame without CKEDITOR and MAIN writer v
 });
 
 test('preserves whitespace between inline words for writing detection',()=>{const {root}=fixture();root.childNodes=[el('span',[t('Design')]),t(' '),el('span',[t('a form')])];assert.equal(D.inspect().exercise,'Design a form')});
+for(const phase of ['before write','during write'])test('CKEditor body replacement '+phase,async()=>{
+ const bridge=require('../video-writing.js'),f=require('./writing-context-fixture.cjs')();
+ const context=await bridge.inspectFrame('captureWriting',f.expected());
+ const replaceBody=()=>{
+   const replacement={...f.body};
+   f.body.isConnected=false;
+   f.frame.contentDocument.body=replacement;
+   f.editor.editable=()=>({$:replacement});
+ };
+ if(phase==='before write')replaceBody();
+ else{
+   const setData=f.editor.setData;
+   f.editor.setData=(html,options)=>{replaceBody();setData(html,options);};
+ }
+ const result=await bridge.inspectFrame('writeWriting',context,'A verified draft.');
+ assert.equal(f.writes(),phase==='before write'?0:1);
+ if(phase==='during write')assert.equal(result.written,true);
+ else assert.equal(result.code,'WRITING_CONTEXT_CHANGED');
+});
+test('Solve advances a reference screen and checks for a writing editor in the same frame',async()=>{
+ const source=fs.readFileSync(require.resolve('../popup.js'),'utf8');
+ const auto=source.slice(source.indexOf('async function autoSolveAndFill()'),source.indexOf('async function submitAndNext()'));
+ const calls=[],writing={found:true,exercise:'Write a report.'};
+ const state={tabId:3,frameId:7,questions:[],screenIndex:0,screenCount:2,referenceScreen:true};
+ const context={state,chrome:{tabs:{query:async()=>[]}},$:()=>({}),scanPage:async()=>true,
+   sendFrame:async(id,m)=>{calls.push([id,m.type]);return {ok:true,result:{advanced:true}};},
+   SparkTextWriting:{scanFrame:async(api,tab,id)=>{calls.push([tab,id]);return writing;}},
+   solveWriting:async(result,tab)=>{calls.push([tab,result.exercise]);state.writingCompleted=true;},
+   solveDiagnostic(){},status(){},errString:e=>e.message};
+ vm.runInNewContext(auto+';globalThis.run=autoSolveAndFill;',context);
+ await context.run();
+ assert.deepEqual(calls,[[7,'SPARK_FORWARD_SCREEN'],[3,7],[3,'Write a report.']]);
+});
+test('writing uses the referenced chart from the same activity and screen',()=>{
+ const {root,frame}=fixture();
+ const reference=el('div',[],{id:'content_wrap_0'});
+ const img=el('img');img.alt='A chart shows bicycles at 70% and cars at 30%.';
+ reference.querySelector=s=>s.includes('.interaction')?{}:null;
+ reference.querySelectorAll=s=>s==='img[alt]'?[img]:[];
+ let presenting=true;
+ document.URL='https://example.test/activity/a';
+ document.title='Writing';
+ document.querySelectorAll=s=>s==='.content-wrap'?[presenting?reference:root]:s.startsWith('iframe')&&!presenting?[frame]:[];
+ let instruction='Write about the chart on Screen 1.';
+ root.querySelector=s=>s==='.layout__rubric'?{innerText:instruction}:null;
+ assert.equal(D.inspect().found,false);
+ presenting=false;
+ assert.ok(D.inspect().exercise.includes(img.alt));
+ instruction='Write about the graph from Screen 3.';
+ assert.match(D.inspect().error,/WRITING_REFERENCE_MISSING/);
+ instruction='Write about the chart on Screen 1.';
+ document.URL+='-different';
+ assert.match(D.inspect().error,/WRITING_REFERENCE_MISSING/);
+});
 test('reports missing editor and specialised controls without CKEDITOR',()=>{const {root}=fixture();global.window={};root.innerText='Design a form';root.querySelector=()=>null;document.querySelectorAll=s=>s==='.content-wrap'?[root]:[];assert.equal(D.inspect().reason,'EDITOR_NOT_FOUND');const f=fixture();f.root.querySelectorAll=()=>[el('select')];assert.equal(D.inspect().reason,'SPECIALIZED_INTERACTION')});
 test('scanFrame rejects an unrelated returned frame',async()=>{const chrome={scripting:{executeScript:async()=>[{frameId:19,result:{found:true}}]}};await assert.rejects(D.scanFrame(chrome,1,20),/frame bài viết/)});
 for(const [selector,tag] of [['[role="radio"]','div'],['[role="checkbox"]','div'],['[role="combobox"]','div'],['.interaction.om-text-gap','div'],['input:not([type="hidden"])','input'],['[role="textbox"]','div'],['select','select']])test('specialized guard reports matched '+selector,()=>{
@@ -45,16 +99,27 @@ for(const [selector,tag] of [['[role="radio"]','div'],['[role="checkbox"]','div'
   const result=D.inspect();assert.equal(result.reason,'SPECIALIZED_INTERACTION');assert.deepEqual(result.diagnostic.selectors,[selector]);assert.equal(result.diagnostic.tag,tag);assert.equal(result.diagnostic.path,tag+':nth-child(1)');assert.equal(result.diagnostic.classification,'visible-outside-cke');assert.doesNotMatch(JSON.stringify(result.diagnostic),/Example Learner|mock-secret/);
 });
 test('hidden controls and elements inside .cke do not trigger specialized guard',()=>{
- const {root}=fixture(),hidden=el('input',[],{hidden:true}),toolbar=el('select');toolbar.closest=s=>s==='.cke'?{}:null;root.querySelectorAll=s=>s==='video'?[]:[hidden,toolbar];assert.equal(D.inspect().found,true);
+ const {root}=fixture(),hidden=el('input',[],{hidden:true}),toolbar=el('select');toolbar.closest=s=>s.includes('.cke')?{}:null;root.querySelectorAll=s=>s==='video'?[]:[hidden,toolbar];assert.equal(D.inspect().found,true);
 });
 function recordingFixture(extra=[]){
- const {root}=fixture(),recording=el('div');recording.parentElement=root;root.children=[recording,...extra];
- recording.matches=s=>s==='.interaction.ic-speaking-and-recording';recording.closest=()=>null;
- root.querySelectorAll=s=>s==='video'?[]:[recording,...extra];return {root,recording};
+ const {root,frame}=fixture(),recording=el('div');recording.parentElement=root;root.children=[recording,...extra];
+ recording.contains=n=>n===frame;recording.closest=s=>s==='.content-wrap'?root:null;recording.attributes=[];recording.classList=new Set(['interaction','ic-speaking-and-recording']);recording.classList.contains=name=>recording.classList.has(name);recording.querySelectorAll=()=>[];
+ recording.matches=s=>s==='.interaction.ic-speaking-and-recording';
+ root.querySelectorAll=s=>s==='video'?[]:s==='.interaction.ic-speaking-and-recording'?[recording]:[recording,...extra];return {root,recording};
 }
-test('confirmed Writing can ignore auxiliary recording widget',()=>{recordingFixture();assert.equal(D.inspect().reason,'SPECIALIZED_INTERACTION');const x=D.inspect({allowAuxRecording:true});assert.equal(x.found,true);assert.equal(x.allowAuxRecording,true);assert.match(x.exercise,/Design a form/)});
+test('editor-only Recording wrapper needs no category exception',()=>{recordingFixture();const x=D.inspect();assert.equal(x.found,true);assert.equal(x.allowAuxRecording,undefined);assert.match(x.exercise,/Design a form/)});
 test('principal pronunciation marking remains blocked even in confirmed Writing context',()=>{const f=recordingFixture();f.recording.matches=s=>s==='.interaction.ic-speaking-and-recording'||s==='.im-marking';assert.equal(D.inspect({allowAuxRecording:true}).reason,'SPECIALIZED_INTERACTION')});
 test('recording without Writing instructions remains ineligible',()=>{const f=recordingFixture();f.root.childNodes=[el('p',[t('Record your pronunciation.')])];assert.equal(D.inspect({allowAuxRecording:true}).reason,'WRITING_INSTRUCTION_NOT_FOUND')});
 for(const selector of ['[role="radio"]','[role="checkbox"]','[role="combobox"]','.interaction.om-text-gap','.interaction.is-linking-lines'])test('confirmed Writing still blocks '+selector,()=>{const other=el('div');other.matches=s=>s===selector;other.closest=()=>null;recordingFixture([other]);assert.equal(D.inspect({allowAuxRecording:true}).reason,'SPECIALIZED_INTERACTION')});
 test('scanFrame passes confirmed Writing context to detector',async()=>{let seen;const chrome={scripting:{executeScript:async opts=>{seen=opts;return [{frameId:42,result:{found:true}}]}}};await D.scanFrame(chrome,3,42,{allowAuxRecording:true});assert.deepEqual(seen.args,[{allowAuxRecording:true}]);assert.equal(seen.world,'ISOLATED')});
 test('recording widget with word pool on the same node remains blocked',()=>{const f=recordingFixture();f.recording.matches=s=>s==='.interaction.ic-speaking-and-recording'||s==='.interaction.om-text-gap';assert.equal(D.inspect({allowAuxRecording:true}).reason,'SPECIALIZED_INTERACTION')});
+for(const mode of ['no-editor-containment','custom-element','unknown-recording-state','pointer-control','live-stream'])test('Recording wrapper fails closed: '+mode,()=>{
+ const {recording}=recordingFixture();
+ if(mode==='no-editor-containment')recording.contains=()=>false;
+ if(mode==='unknown-recording-state')recording.getAttribute=name=>name==='data-recording-state'?'pending':null;
+ if(mode==='live-stream')recording.srcObject={active:true};
+ if(mode==='custom-element')recording.querySelectorAll=()=>[{tagName:'CUSTOM-RECORDER',getAttribute:()=>null,closest:()=>null,hasAttribute:()=>false}];
+ if(mode==='pointer-control'){const style=global.getComputedStyle;global.getComputedStyle=node=>({...style(node),cursor:node===recording?'pointer':'auto'});}
+ assert.equal(D.inspect({allowAuxRecording:true}).reason,'SPECIALIZED_INTERACTION');
+});
+test('CKEditor dialog text is excluded from exercise instructions',()=>{const {root}=fixture();root.childNodes.push(el('div',[t('SYNTHETIC_EDITOR_DIALOG_TEXT')],{skip:'.cke_dialog'}));assert.doesNotMatch(D.inspect().exercise,/SYNTHETIC_EDITOR_DIALOG_TEXT/)});

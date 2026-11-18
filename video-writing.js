@@ -22,12 +22,15 @@
       const media=()=>{if(!video)return '';const src=video.currentSrc||video.getAttribute('src')||video.querySelector('source[src]')?.getAttribute('src');try{return src?new URL(src,video.ownerDocument.baseURI).href:null;}catch{return null;}};
       if(media()!==(expected.videoUrl||''))return changed();
       const videoUrl=media();
-      const valid=()=>document===doc&&document.URL===url&&identity()===exerciseId&&scope.isConnected&&frame.isConnected&&container.isConnected&&editable.isConnected&&
+      const valid=(afterSetData=false)=>{
+        const body=editor.editable?.()?.$;
+        return document===doc&&document.URL===url&&identity()===exerciseId&&scope.isConnected&&frame.isConnected&&container.isConnected&&body?.isConnected&&
         [...document.querySelectorAll('.content-wrap')].filter(visible).length===1&&[...document.querySelectorAll('.content-wrap')].filter(visible)[0]===scope&&scope.contains(frame)&&scope.textContent===text&&
         [...document.querySelectorAll('iframe.cke_wysiwyg_frame,iframe[title^="Rich Text Editor"]')].filter(visible).length===1&&visible(scope)&&visible(frame)&&
-        frame.contentDocument===frameDoc&&frameDoc.body===editable&&editable.getAttribute('contenteditable')==='true'&&scope.querySelector('video')===video&&media()===videoUrl&&
+        frame.contentDocument===frameDoc&&frameDoc.body===body&&body.getAttribute('contenteditable')==='true'&&scope.querySelector('video')===video&&media()===videoUrl&&
         Object.values(window.CKEDITOR?.instances||{}).filter(e=>e?.container?.$?.querySelector('iframe')===frame).length===1&&Object.values(window.CKEDITOR?.instances||{}).includes(editor)&&editor.container?.$===container&&container.querySelector('iframe')===frame&&
-        editor.editable?.()?.$===editable&&editor.status==='ready'&&editor.mode==='wysiwyg'&&!editor.readOnly;
+        (afterSetData||body===editable)&&editor.status==='ready'&&editor.mode==='wysiwyg'&&!editor.readOnly;
+      };
       if(!valid())return changed();
       const token=crypto.randomUUID();
       Object.defineProperty(window,slot,{value:{token,valid,editor},writable:true,configurable:true});
@@ -51,13 +54,14 @@
     if(!saved.valid())return changed();
     // No await between the context guard and the first editor mutation.
     const written=await new Promise(resolve=>{let done=false;const timer=setTimeout(()=>{if(!done){done=true;resolve(false);}},5000);try{editor.setData(html,{callback:()=>{if(!done){done=true;clearTimeout(timer);resolve(true);}}});}catch{clearTimeout(timer);resolve(false);}});
-    if(!saved.valid())return changed();
+    // CKEditor may replace its editable body while setData runs in the same frame document.
+    if(window[slot]!==saved||!saved.valid(true))return changed();
     if(!written)return {found:true,error:'Không ghi được CKEditor.'};
     const check=document.createElement('div');check.innerHTML=editor.getData();
     check.querySelectorAll('br').forEach(br=>br.replaceWith(document.createTextNode('\n')));
     const lines=s=>String(s).replace(/\u00a0/g,' ').replace(/\r\n?/g,'\n').split('\n').map(line=>line.trim().replace(/[ \t]+/g,' ')).join('\n').trim();
     if(lines(check.textContent)!==lines(answer))return {found:true,error:'Không xác minh được nội dung CKEditor.'};
-    if(!saved.valid())return changed();
+    if(window[slot]!==saved||!saved.valid(true))return changed();
     return {found:true,written:true};
   }
   async function scan(chromeApi,tabId){

@@ -2002,13 +2002,20 @@
     return {submitted:true,confirmed:true,nextClicked:false,mode};
   }
 
+  function referenceScreen(root,result){
+    return Number.isInteger(result.screenCount)&&result.screenIndex<result.screenCount-1&&
+      result.questions.every(q=>q.kind==='manual')&&root.querySelectorAll('.interaction').length===1&&
+      !!root.querySelector('.interaction.pp-present')&&!root.querySelector('input,textarea,[contenteditable="true"],.audioRecorder,.lrp_wrap,iframe');
+  }
+
   async function forwardScreen(expectedIndex, expectedCount) {
     if(!lastScan.activeRoot || activeContentRoot()!==lastScan.activeRoot ||
        !Number.isInteger(expectedIndex) || !Number.isInteger(expectedCount) ||
        lastScan.screenIndex!==expectedIndex || lastScan.screenCount!==expectedCount ||
        expectedCount<2 || expectedIndex<0 || expectedIndex>=expectedCount-1)
       return {advanced:false,reason:'screenBoundary'};
-    if(!appliedStillMatches())return {advanced:false,reason:'screenUnverified'};
+    if(!(lastScan.referenceScreen&&referenceScreen(lastScan.activeRoot,lastScan))&&!appliedStillMatches())
+      return {advanced:false,reason:'screenUnverified'};
     const next=availableActionControls('forward');
     if(next.length!==1)return {advanced:false,reason:'screenForwardMissing'};
     // Spark's intra-activity navigation is `forward`, NEVER `forward_lo`.
@@ -2033,7 +2040,11 @@
     if (!message || !['SPARK_SCAN','SPARK_COPY_PROMPT','SPARK_APPLY','SPARK_PING','SPARK_SUBMIT_NEXT','SPARK_FORWARD_SCREEN','SPARK_QTI'].includes(message.type)) return false;
     if (message.type === 'SPARK_PING') {respond({ok:true,ready:true});return false;}
     if (message.type === 'SPARK_SCAN') {
-      try {respond({ok:true,result:scan()});} catch(e) {respond({ok:false,error:e.message});}
+      try {
+        const result=scan();
+        lastScan.referenceScreen=Boolean(lastScan.activeRoot&&referenceScreen(lastScan.activeRoot,result));
+        respond({ok:true,result:lastScan.referenceScreen?{...result,referenceScreen:true}:result});
+      } catch(e) {respond({ok:false,error:e.message});}
       return false;
     }
     if (message.type === 'SPARK_COPY_PROMPT') {

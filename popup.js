@@ -67,7 +67,7 @@ async function scanPage() {
     try{frames=await chrome.webNavigation.getAllFrames({tabId:tab.id});}catch{frames=null;}
     const targets=frames?.length?frames.map(f=>f.frameId):[0];
     const responses=await Promise.all(targets.map(async frameId=>({frameId,response:await sendFrame(frameId,{type:'SPARK_SCAN'})})));
-    const candidates=responses.filter(x=>x.response?.ok && x.response.result?.questions?.length);
+    const candidates=responses.filter(x=>x.response?.ok && (x.response.result?.questions?.length||x.response.result?.referenceScreen));
     const inaccessible=responses.filter(x=>x.response?.reason==='accessUnavailable');
     const failed=responses.filter(x=>!x.response?.ok&&x.response?.reason!=='accessUnavailable');
     if(failed.length)solveDiagnostic('scan-failures',{frames:failed.slice(0,60).map(x=>({frameId:x.frameId,reason:x.response?.reason||'scanFailed'}))});
@@ -81,6 +81,7 @@ async function scanPage() {
     const selected=candidates[0];
     state.frameId=selected.frameId;
     state.screenIndex=selected.response.result.screenIndex;
+    state.referenceScreen=selected.response.result.referenceScreen===true;
     state.screenCount=selected.response.result.screenCount;
     state.verifiedQti=false;
     state.title=selected.response.result.title;
@@ -389,6 +390,15 @@ async function autoSolveAndFill() {
       const key=`${state.frameId}:${index}:${count}`;
       if(seen.has(key)){status('Screen did not advance; stopped safely.','error');break;}
       seen.add(key);
+      if(state.referenceScreen){
+        const moved=await sendFrame(state.frameId,{type:'SPARK_FORWARD_SCREEN',screenIndex:index,screenCount:count});
+        if(!moved?.result?.advanced){status(t('noExercise'),'error');break;}
+        try{
+          const writing=await SparkTextWriting.scanFrame(chrome,state.tabId,state.frameId);
+          if(writing.found){await solveWriting(writing,state.tabId);return;}
+        }catch(error){status(errString(error),'error');return;}
+        continue;
+      }
       if(!(await solve())){solveDiagnostic('APPLY_NOT_REQUESTED',{reason:'solveNotReady',frameId:state.frameId});break;}
       if(state.writingCompleted)break;
       if(!(await applyAnswers()))break;
