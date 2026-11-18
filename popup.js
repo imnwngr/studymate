@@ -230,16 +230,21 @@ async function solve() {
       qtiFailure=read?.result;
       if(read?.ok && Array.isArray(read.result?.answers))qti=read.result.answers;
     } catch { qtiFailure={reason:'qtiReadFailed'}; }
-    if(qtiFailure?.reason==='deferredCategory' && /\|\s*writing(?: skill)?\s*\|/i.test(state.title) && all.length===1 && all[0].kind==='text'){
-      const writing=await SparkTextWriting.scanFrame(chrome,state.tabId,state.frameId,{allowAuxRecording:true});
-      if(!writing.found){
+    if(state.sparkTab && ['deferredCategory','noMapping'].includes(qtiFailure?.reason) && qti.length===0 && all.length===1 && all[0].kind==='text'){
+      const confirmedWriting=qtiFailure.reason==='deferredCategory'&&/\|\s*writing(?: skill)?\s*\|/i.test(state.title);
+      let writing=await SparkTextWriting.scanFrame(chrome,state.tabId,state.frameId);
+      if(!writing.found&&writing.reason==='CONTENT_ROOT_NOT_FOUND'){
+        const otherFrame=await SparkTextWriting.scan(chrome,state.tabId);
+        if(otherFrame.found)writing=otherFrame;
+      }
+      if(writing.found)return await solveWriting(writing,state.tabId);
+      if(confirmedWriting||['SPECIALIZED_INTERACTION','WRITING_INSTRUCTION_NOT_FOUND'].includes(writing.reason)){
         const detail=writing.diagnostic;
         if(detail)solveDiagnostic('WRITING_DETECT_DETAIL',{frameId:state.frameId,...detail});
         const selector=detail?.selectors?.join(', ')||'unknown';
         const location=detail?.path||'unknown';
         throw new Error('WRITING_DETECT: '+(writing.reason||'UNKNOWN')+(detail?' ['+selector+'; '+location+']':'')+' (frame '+state.frameId+').');
       }
-      return await solveWriting(writing,state.tabId);
     }
     if(all.length===1&&all[0].kind==='review'&&(qti.length!==1||!qti[0]?.reviewVerified)){
       state.answers=new Map();state.solved=false;state.verifiedQti=false;updateAnswers();
