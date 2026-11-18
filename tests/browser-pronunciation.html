@@ -102,6 +102,16 @@ for(const [name,change] of [
 }
 container.innerHTML='<section class="interaction ic-speaking-and-recording"><button>Microphone</button></section>';
 const microphone=await request('SPARK_SCAN');assert(!microphone.questions.some(q=>q.kind==='pronunciation'),'microphone misdetected');cases.push('microphone excluded');
+container.innerHTML='<section class="interaction"><div class="contentblock"><p>First prompt <span class="lrp_wrap audioRecorder"><button class="lrp_record">Record</button></span></p><p>Second prompt <span class="audioRecorder"><button class="lrp_record" disabled>Record</button></span></p><span class="audioRecorder" hidden><button class="lrp_record">Hidden</button></span><span class="audioRecorder"><button>Play</button></span></div></section>';
+const spoken=await request('SPARK_SCAN');
+assert(spoken.questions.length===2&&spoken.questions.every(q=>q.kind==='audioRecording'&&!q.applyable),'recognize only visible recording controls');
+assert(spoken.questions.map(q=>q.context).join('/')==='First prompt/Second prompt','group each recorder with its own prompt');
+cases.push('spoken responses with unrelated title, disabled mic and hidden duplicate');
+container.querySelector('.contentblock').insertAdjacentHTML('beforeend','<p>Type a word <input type="text"></p>');
+const mixed=await request('SPARK_SCAN');
+assert(mixed.questions.filter(q=>q.kind==='audioRecording').length===2&&mixed.questions.some(q=>q.kind==='text'),'keep text and audio on a mixed screen');
+assert(new Set(mixed.questions.map(q=>q.id)).size===mixed.questions.length,'unique question identifiers');
+cases.push('mixed recording and text inputs');
 document.body.append(Object.assign(document.createElement('pre'),{id:'test-result',textContent:JSON.stringify({passed:cases.length,cases})}));
 })().catch(error=>document.body.append(Object.assign(document.createElement('pre'),{id:'test-error',textContent:error.stack||String(error)})));
 </script></body></html>

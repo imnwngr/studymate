@@ -19,7 +19,7 @@ async function main(){
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
  const profile=fs.mkdtempSync(path.join(os.tmpdir(),'spark-pronunciation-'));
  try{
-  for(const [page,count] of [['browser-pronunciation.html',27],['browser-pronunciation-transition.html',21]]){
+  for(const [page,count] of [['browser-pronunciation.html',29],['browser-pronunciation-transition.html',21]]){
   const output=await new Promise((resolve,reject)=>{
    const child=spawn(browser,['--headless=new','--disable-gpu','--no-first-run','--no-default-browser-check',`--user-data-dir=${profile}`,'--virtual-time-budget=40000','--dump-dom',`http://127.0.0.1:${server.address().port}/tests/${page}`]);
    let stdout='',stderr='';const timer=setTimeout(()=>{child.kill();reject(Error('Pronunciation tests timed out'));},45000);

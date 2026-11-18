@@ -125,6 +125,11 @@ function render() {
     const poly=document.createElementNS('http://www.w3.org/2000/svg','path');poly.setAttribute('d','m6 9 6 6 6-6');chevron.append(poly);
     end.append(badge,chevron);head.append(main,end);card.append(head);
     const body=el('div','question-body');
+    if(q.kind==='audioRecording'){
+      body.append(el('span','question-kind',t('kindAudioRecording')),
+        el('p','question-text',q.context),el('p','explanation',t('recordOnSpark')));
+      card.append(body);fragment.append(card);continue;
+    }
     body.append(el('span','question-kind',t({dropdown:'kindDropdown',choice:'kindDropdown',multi:'kindDropdown',checkbox:'kindDropdown',match:'kindManual',linkingLines:'kindManual',gapWordPool:'kindWordPool',text:'kindText',order:'kindOrder',correction:'kindCorrection',manual:'kindManual'}[q.kind]||'kindOther')));
     body.append(el('p','question-text',q.localContext||q.context));
     if(q.options?.length) body.append(el('p','options-preview',`${t('optionsLabel')}: ${q.options.join(' · ')}`));
@@ -215,6 +220,10 @@ async function solveWriting(writing,tabId){
 async function solve() {
   if(!state.questions.length)return false;
   state.lastApplyVerified=false;$('submitNext').disabled=true;
+  if(state.questions.some(q=>q.kind==='audioRecording')){
+    status(t('recordOnSpark'));
+    return false;
+  }
   progress('solve');status(t('solving'));
   try {
     const all=state.questions.map(q=>({id:q.id,kind:q.kind,context:q.context,

@@ -1,6 +1,17 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const source=fs.readFileSync(path.join(__dirname,'../popup.js'),'utf8');
+test('Solve stops before sending any requests on a screen with a recording prompt',async()=>{
+ const submit={disabled:false},messages=[];
+ const state={questions:[{kind:'text'},{kind:'audioRecording'}],lastApplyVerified:true};
+ const context={state,$:()=>submit,t:key=>key,status:message=>messages.push(message)};
+ const solve=source.slice(source.indexOf('async function solve()'),source.indexOf('// Copy the complete current exercise'));
+ const run=vm.runInNewContext(solve+';solve',context);
+ assert.equal(await run(),false);
+ assert.equal(state.lastApplyVerified,false);
+ assert.equal(submit.disabled,true);
+ assert.deepEqual(messages,['recordOnSpark']);
+});
 for(const scenario of ['verified','missing QTI','unverified final state'])test('popup pronunciation: '+scenario,async()=>{
  const messages=[],nodes=new Map();
  const node=id=>{if(!nodes.has(id))nodes.set(id,{disabled:false,textContent:'',classList:{add(){},remove(){}}});return nodes.get(id);};

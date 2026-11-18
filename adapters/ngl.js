@@ -2002,6 +2002,40 @@
     return {submitted:true,confirmed:true,nextClicked:false,mode};
   }
 
+  function scanWithRecorders() {
+    const result = scan();
+    const root = lastScan.activeRoot;
+    if (!root) return result;
+    const recorders = [...root.querySelectorAll('.interaction .audioRecorder, .interaction .lrp_wrap')]
+      .filter(node => {
+        const record = node.querySelector('button.lrp_record');
+        return record && record.closest('.audioRecorder, .lrp_wrap') === node &&
+          visible(record) && !record.closest('[aria-hidden="true"], .activity--hidden');
+      });
+    if (!recorders.length) {
+      lastScan.referenceScreen=referenceScreen(root,result);
+      return lastScan.referenceScreen?{...result,referenceScreen:true}:result;
+    }
+
+    // Generic manual cards may describe the rubric or an entire dialogue as one item.
+    const questions = result.questions.every(q => q.kind === 'manual')
+      ? [] : [...result.questions];
+    for (const recorder of recorders) {
+      const paragraph = recorder.closest('p');
+      const range = document.createRange();
+      let prompt = '';
+      if (paragraph) {
+        range.selectNodeContents(paragraph);
+        range.setEndBefore(recorder);
+        prompt = tidy(range.toString()).slice(-1200);
+      }
+      questions.push({id: 'q' + (questions.length + 1), kind: 'audioRecording',
+        context: prompt, options: [], applyable: false});
+    }
+    lastScan.questions = questions;
+    return {...result, questions, hasExercise: true};
+  }
+
   function referenceScreen(root,result){
     return Number.isInteger(result.screenCount)&&result.screenIndex<result.screenCount-1&&
       result.questions.every(q=>q.kind==='manual')&&root.querySelectorAll('.interaction').length===1&&
@@ -2041,9 +2075,7 @@
     if (message.type === 'SPARK_PING') {respond({ok:true,ready:true});return false;}
     if (message.type === 'SPARK_SCAN') {
       try {
-        const result=scan();
-        lastScan.referenceScreen=Boolean(lastScan.activeRoot&&referenceScreen(lastScan.activeRoot,result));
-        respond({ok:true,result:lastScan.referenceScreen?{...result,referenceScreen:true}:result});
+        respond({ok:true,result:scanWithRecorders()});
       } catch(e) {respond({ok:false,error:e.message});}
       return false;
     }
