@@ -63,8 +63,9 @@
     const roots=[...document.querySelectorAll('.interaction, .om-text-gap')];
     return roots.filter(root=>!roots.some(other=>other!==root && classes(other).split(' ').includes('om-text-gap') && root.contains?.(other)));
   }
-  const sourceSelector='.om-text-gap__pool-item, .os-sorting-element';
+  const sourceSelector='.om-text-gap__pool-item, .os-sorting-element, .os-sequence-element';
   const destinationSelector='.om-text-gap__target-item, .osSorting__category';
+  const gradedItemSelector='.os-sorting-element, .os-sequence-element, .om-text-gap__target-item';
   function attribution(node) {
     const el=node?.nodeType===3?node.parentElement:node,root=interactionRoot(el);
     if(!root)return {draggableModelId:attr(el?.closest?.('.om-text-gap__draggable'),'data-model-id'),root:null,role:'unscoped'};
@@ -89,9 +90,9 @@
       connected:el.isConnected,visible:isVisible(el),disabled,enabled:!disabled,
       selected:/(?:^|[ _-])(selected|active)(?:$|[ _-])/.test(classes(el))||attr(el,'aria-selected')==='true'||[...el.querySelectorAll('.om-text-gap__draggable, .om-text-gap__draggable-handle')].slice(0,60).some(n=>/(?:^|[ _-])(selected|active)(?:$|[ _-])/.test(classes(n))||attr(n,'aria-selected')==='true'),
       occupancy:{hasText:!!text,childCount:el.children.length,occupantIds:liveWords.map(n=>attr(n,'data-model-id')||clean(n.id,120)||locator(n,true).nodeId),draggableCount:liveWords.length,hasDragClass:/(?:^| )has_drag(?:$| )/.test(classes(el)),emptyClass:/(?:^|[ _-])empty(?:$|[ _-])/.test(classes(el)),filledClass:/(?:^|[ _-])(filled|occupied)(?:$|[ _-])/.test(classes(el))}};
-    if(el.matches?.('.os-sorting-element')){
+    if(el.matches?.(gradedItemSelector)){
       const marks=[...el.querySelectorAll('.check.correct, .check.wrong')].filter(mark=>
-        isVisible(mark)&&!mark.closest('[hidden], [aria-hidden="true"]'));
+        mark.closest(gradedItemSelector)===el&&isVisible(mark)&&!mark.closest('[hidden], [aria-hidden="true"]'));
       if(marks.length===1){
         const correct=marks[0].matches('.correct'),wrong=marks[0].matches('.wrong');
         if(correct!==wrong)result.feedback=correct?'correct':'incorrect';

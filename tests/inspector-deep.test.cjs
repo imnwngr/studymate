@@ -81,6 +81,34 @@ test('sorting feedback is recorded only for a single visible, unambiguous mark',
  mark.getClientRects=()=>[];
  assert.equal(read(),undefined);
 });
+test('word-pool feedback belongs to the graded gap, including on a compact trace',()=>{
+ const h=harness();
+ const read=()=>h.send('CAPTURE').result.deepInteractions[0];
+ const other=h.root.add(new h.El('div','g2','om-text-gap__target-item'));
+ h.gap.add(new h.El('div','','check wrong'));
+ other.add(new h.El('div','','check correct'));
+ const capture=read();
+ assert.deepEqual(Array.from(capture.destinations,n=>n.feedback),['incorrect','correct']);
+ assert.equal(capture.sources[0].feedback,undefined);
+ h.send('TRACE_START');
+ h.listeners.click({type:'click',target:h.gap});
+ const event=h.send('TRACE_GET').result.events.find(e=>e.type==='action-before');
+ assert.deepEqual(Array.from(event.beforeState[0].destinations,n=>n.feedback),['incorrect','correct']);
+});
+test('sequence tiles retain their order and report only their own visible mark',()=>{
+ const h=harness();
+ h.root.className='interaction os-sequence';
+ h.source.className='os-sequence-element';
+ const second=h.root.add(new h.El('li','s2','os-sequence-element'));
+ h.source.add(new h.El('div','','check correct'));
+ const nested=h.source.add(new h.El('div','','om-text-gap__target-item'));
+ nested.add(new h.El('div','','check wrong'));
+ const wrong=second.add(new h.El('div','','check wrong'));
+ const read=()=>Array.from(h.send('CAPTURE').result.deepInteractions[0].sources,n=>[n.id,n.feedback]);
+ assert.deepEqual(read(),[['s1','correct'],['s2','incorrect']]);
+ wrong.getClientRects=()=>[];
+ assert.deepEqual(read(),[['s1','correct'],['s2',undefined]]);
+});
 test('sorting traces identify tiles inside each column after a move',()=>{
  const h=harness();
  h.root.className='interaction os-sorting';
