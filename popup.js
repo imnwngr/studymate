@@ -61,6 +61,7 @@ async function scanPage() {
     showSiteStatus(tab);
     if (!tab?.id || !SparkSites.access(tab.url)) throw new Error(t('siteAccessUnavailable'));
     state.tabId=tab.id;
+    state.sparkTab=SparkSites.recognize(tab.url)?.adapterId==='ngl';
     if(state.solveOperation)solveDiagnostic('SCAN_STARTED',{operationId:state.solveOperation,tabId:state.tabId,frameId:null,result:'discovering-frames'});
     let frames;
     try{frames=await chrome.webNavigation.getAllFrames({tabId:tab.id});}catch{frames=null;}
@@ -218,15 +219,16 @@ async function solve() {
     const all=state.questions.map(q=>({id:q.id,kind:q.kind,context:q.context,
       localContext:q.localContext||'',options:q.options,choiceIds:q.choiceIds||[],choiceLabelsVerified:q.choiceLabelsVerified===true,orderTokens:q.orderTokens||[],rubric:q.rubric,wordBank:q.wordBank||'',hint:q.hint,before:q.before,after:q.after}));
     const payload={title:state.title,uiLanguage:I.language,questions:all};
+    const qtiOnly=state.sparkTab||state.architecture?.adapterId==='ngl';
     let qti=[],qtiFailure=null;
     try {
       const read=await sendFrame(state.frameId,{type:'SPARK_QTI',ids:all.map(q=>q.id)});
       solveDiagnostic('qti',{frameId:state.frameId,ok:read?.ok===true,
-        reason:read.result?.reason,answers:read.result?.answers?.length||0,
-        diagnostics:read.result?.diagnostics?.slice(0,20),error:read.error});
+        reason:read?.result?.reason,answers:read?.result?.answers?.length||0,
+        diagnostics:read?.result?.diagnostics?.slice(0,20),error:read?.error});
       qtiFailure=read?.result;
       if(read?.ok && Array.isArray(read.result?.answers))qti=read.result.answers;
-    } catch { /* QTI is best effort; a missed key must not block AI fallback. */ }
+    } catch { qtiFailure={reason:'qtiReadFailed'}; }
     if(qtiFailure?.reason==='deferredCategory' && /\|\s*writing(?: skill)?\s*\|/i.test(state.title) && all.length===1 && all[0].kind==='text'){
       const writing=await SparkTextWriting.scanFrame(chrome,state.tabId,state.frameId,{allowAuxRecording:true});
       if(!writing.found){
@@ -247,7 +249,7 @@ async function solve() {
     let labelsUpdated=false;
     for(const answer of qti){
       const question=all.find(q=>q.id===answer.id);
-      if(!question || trusted.has(answer.id) || !answer.answer)continue;
+      if(!question || trusted.has(answer.id) || !answer.answer || answer.source!=='qti')continue;
       if(['choice','multi','checkbox'].includes(question.kind)){
         if(!answer.selectedIds?.length || !question.choiceIds?.length ||
           answer.selectedIds.some(id=>!question.choiceIds.includes(id)) ||
@@ -261,7 +263,7 @@ async function solve() {
     const remaining=all.filter(q=>!trusted.has(q.id));
     const eligibleFallback=remaining.filter(q=>!['checkbox','linkingLines','pronunciation','textCorrection','review'].includes(q.kind));
     let fallback=null;
-    if(eligibleFallback.length){
+    if(!qtiOnly&&eligibleFallback.length){
       try {
         const response=await chrome.runtime.sendMessage({type:'SPARK_SOLVE',payload:{...payload,questions:eligibleFallback}});
         if(!response?.ok)throw new Error(response?.error||t('solveFailed'));
@@ -282,6 +284,13 @@ async function solve() {
     if(labelsUpdated)render();
     updateAnswers();
     const complete=all.filter(q=>state.answers.get(q.id)?.answer).length;
+    if(qtiOnly&&!state.verifiedQti){
+      state.solved=false;
+      solveDiagnostic('QTI_INCOMPLETE',{frameId:state.frameId,reason:qtiFailure?.reason||'noMapping',
+        missing:remaining.map(q=>({id:q.id,kind:q.kind}))});
+      status(t('qtiInspectMissing',{n:trusted.size,total:all.length}),'error');
+      return false;
+    }
     if(complete>0)progress('apply');
     const label=trusted.size===all.length?t('qtiLabel'):
       trusted.size?t('qtiMixed'):

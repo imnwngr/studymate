@@ -50,6 +50,10 @@
     'zh-TW':{siteRegistered:'支援的網站 — {site}',siteUnregistered:'網站不在支援清單中。掃描與解答仍可能可用。',siteAccessUnavailable:'無法存取頁面。請檢查網站權限。',siteSomeFramesUnavailable:'部分框架無法存取。請檢查網站權限。',siteScanFailed:'可存取的框架掃描失敗。請查看擴充功能診斷。',genericSubmitUnsupported:'此轉接器不支援提交。',genericNavigationUnsupported:'此轉接器不支援自動跳轉。'}
   };
   for(const locale of Object.keys(siteCopy))Object.assign(appearanceCopy[locale],siteCopy[locale]);
+  Object.assign(appearanceCopy.en,{qtiInspectMissing:'Matched {n}/{total} responses to QTI. Open Inspector to examine the missing matches.'});
+  Object.assign(appearanceCopy.vi,{qtiInspectMissing:'Đã ghép {n}/{total} đáp án QTI. Mở Inspector để kiểm tra các câu còn thiếu.'});
+  Object.assign(appearanceCopy['zh-CN'],{qtiInspectMissing:'已匹配 {n}/{total} 个 QTI 答案。请打开检查器查看未匹配的题目。'});
+  Object.assign(appearanceCopy['zh-TW'],{qtiInspectMissing:'已配對 {n}/{total} 個 QTI 答案。請開啟檢查器查看未配對的題目。'});
   const supported=new Set(['en','vi','zh-CN','zh-TW']);
   let language='en';
   const dict=()=>language==='vi'?vi:language==='zh-CN'?zhCN:language==='zh-TW'?zhTW:en;

@@ -63,11 +63,13 @@
     const roots=[...document.querySelectorAll('.interaction, .om-text-gap')];
     return roots.filter(root=>!roots.some(other=>other!==root && classes(other).split(' ').includes('om-text-gap') && root.contains?.(other)));
   }
+  const sourceSelector='.om-text-gap__pool-item, .os-sorting-element';
+  const destinationSelector='.om-text-gap__target-item, .osSorting__category';
   function attribution(node) {
     const el=node?.nodeType===3?node.parentElement:node,root=interactionRoot(el);
     if(!root)return {draggableModelId:attr(el?.closest?.('.om-text-gap__draggable'),'data-model-id'),root:null,role:'unscoped'};
-    const source=el.closest?.('.om-text-gap__pool-item'),destination=el.closest?.('.om-text-gap__target-item');
-    const handle=el.closest?.('.om-text-gap__draggable, .om-text-gap__draggable-handle, .om-text-gap__droppable');
+    const source=el.closest?.(sourceSelector),destination=el.closest?.(destinationSelector);
+    const handle=el.closest?.('.om-text-gap__draggable, .om-text-gap__draggable-handle, .om-text-gap__droppable, .draggable__handle');
     return {draggableModelId:attr(el?.closest?.('.om-text-gap__draggable'),'data-model-id'),root:locator(root,true),role:source?'source':destination?'destination':el.closest?.('.pool, .wordpool')?'pool-background':'interaction-background',source:source?locator(source,true):null,destination:destination?locator(destination,true):null,sourceModelId:attr(source,'data-model-id'),destinationModelId:attr(destination,'data-model-id'),handle:handle?locator(handle,true):null};
   }
   function compactNode(node) {
@@ -87,6 +89,13 @@
       connected:el.isConnected,visible:isVisible(el),disabled,enabled:!disabled,
       selected:/(?:^|[ _-])(selected|active)(?:$|[ _-])/.test(classes(el))||attr(el,'aria-selected')==='true'||[...el.querySelectorAll('.om-text-gap__draggable, .om-text-gap__draggable-handle')].slice(0,60).some(n=>/(?:^|[ _-])(selected|active)(?:$|[ _-])/.test(classes(n))||attr(n,'aria-selected')==='true'),
       occupancy:{hasText:!!text,childCount:el.children.length,occupantIds:liveWords.map(n=>attr(n,'data-model-id')||clean(n.id,120)||locator(n,true).nodeId),draggableCount:liveWords.length,hasDragClass:/(?:^| )has_drag(?:$| )/.test(classes(el)),emptyClass:/(?:^|[ _-])empty(?:$|[ _-])/.test(classes(el)),filledClass:/(?:^|[ _-])(filled|occupied)(?:$|[ _-])/.test(classes(el))}};
+    if(el.matches?.('.osSorting__category')){
+      const tiles=[...el.querySelectorAll('.os-sorting-element')].filter(isVisible);
+      result.label=safeText(el.querySelector('.osSorting__categoryTitle'),160);
+      result.occupancy.hasText=tiles.length>0;
+      result.occupancy.draggableCount=tiles.length;
+      result.occupancy.occupantIds=tiles.slice(0,limits.nodes).map(tile=>attr(tile,'data-model-id')||clean(tile.id,120)||locator(tile,true).nodeId);
+    }
     if(children&&!compact)result.children=[...el.children].slice(0,limits.children).map(n=>deepNode(n));return result;
   }
   function frameEvidence() {
@@ -108,17 +117,17 @@
     if(compact)return (onlyRoot?[onlyRoot]:interactionRoots()).slice(0,limits.roots).map(root=>({
       root:{id:root.id||null,locator:locator(root,true)},
       identity:{title:clean(document.title,180),interactiveId:safeUrl()?.match(/\/(?:interactives|cdn_proxy)\/([^/]+)/)?.[1]||null},
-      sources:[...root.querySelectorAll('.om-text-gap__pool-item')].slice(0,limits.nodes).map(occupancyNode),
-      destinations:[...root.querySelectorAll('.om-text-gap__target-item')].slice(0,limits.nodes).map(occupancyNode),
-      bounds:{sourceTotal:root.querySelectorAll('.om-text-gap__pool-item').length,destinationTotal:root.querySelectorAll('.om-text-gap__target-item').length}
+      sources:[...root.querySelectorAll(sourceSelector)].slice(0,limits.nodes).map(occupancyNode),
+      destinations:[...root.querySelectorAll(destinationSelector)].slice(0,limits.nodes).map(occupancyNode),
+      bounds:{sourceTotal:root.querySelectorAll(sourceSelector).length,destinationTotal:root.querySelectorAll(destinationSelector).length}
     }));
     const state=(onlyRoot?[onlyRoot]:interactionRoots()).slice(0,limits.roots).map(root=>({
       root:deepNode(root,false,compact),identity:{title:clean(document.querySelector('[data-exercise-title], .exercise-title')?.textContent||document.title,180),titleSource:document.querySelector('[data-exercise-title], .exercise-title')?'exercise heading':'exercise frame title',interactiveId:attr(root,'data-interactive-id')||safeUrl()?.match(/\/(?:interactives|cdn_proxy)\/([^/]+)/)?.[1]||null},
-      sources:[...root.querySelectorAll('.om-text-gap__pool-item')].slice(0,limits.nodes).map(n=>deepNode(n,!compact,compact)),
-      destinations:[...root.querySelectorAll('.om-text-gap__target-item')].slice(0,limits.nodes).map(n=>deepNode(n,!compact,compact)),
+      sources:[...root.querySelectorAll(sourceSelector)].slice(0,limits.nodes).map(n=>deepNode(n,!compact,compact)),
+      destinations:[...root.querySelectorAll(destinationSelector)].slice(0,limits.nodes).map(n=>deepNode(n,!compact,compact)),
       handles:[...root.querySelectorAll('[draggable="true"], button, [role="button"], .om-text-gap__draggable, .om-text-gap__droppable')].slice(0,limits.nodes).map(n=>deepNode(n,false,compact)),
       feedback:[...root.querySelectorAll('[role="alert"], [aria-live], .feedback, .validation')].slice(0,8).map(n=>deepNode(n,false,compact)),
-      bounds:{...limits,sourceTotal:root.querySelectorAll('.om-text-gap__pool-item').length,destinationTotal:root.querySelectorAll('.om-text-gap__target-item').length}
+      bounds:{...limits,sourceTotal:root.querySelectorAll(sourceSelector).length,destinationTotal:root.querySelectorAll(destinationSelector).length}
     }));
     return compact?state.map(w=>({...w,root:compactNode(w.root),sources:w.sources.map(compactNode),destinations:w.destinations.map(compactNode),handles:w.handles.map(compactNode),feedback:w.feedback.map(compactNode)})):state;
   }

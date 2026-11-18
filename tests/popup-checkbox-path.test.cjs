@@ -36,6 +36,41 @@ test('single-choice labels still require exact membership',async()=>{
  const h=setup(({state})=>state.questions[0].kind='choice');await h.context.runSolve();assert.equal(await h.context.runApply(),false);
  assert.equal(h.messages.some(x=>x.message.type==='SPARK_APPLY'),false);
 });
+for(const kind of ['sorting','review','pronunciation','textCorrection','checkbox','text']){
+ test('Spark '+kind+' with missing QTI never requests a generated answer',async()=>{
+   const h=setup(({state,replies})=>{
+     state.sparkTab=true;
+     state.aiMode='single';
+     Object.assign(state.questions[0],{kind,stressAudio:kind==='pronunciation',
+       correctionDraft:kind==='textCorrection'?{}:null,hasReadingPassage:true,choiceLabelsVerified:true});
+     replies.length=0;
+   });
+   let requests=0;h.context.chrome.runtime.sendMessage=async()=>{requests++;return {ok:false};};
+   if(kind==='text')h.context.sendFrame=async(frame,message)=>{
+     h.messages.push({frame,message});return {ok:true,result:{reason:'correctionCodeAIRequired',answers:[]}};
+   };
+   assert.equal(await h.context.runSolve(),false);
+   assert.deepEqual(h.messages.map(m=>m.message.type),['SPARK_QTI']);
+   assert.equal(requests,0);
+   assert.equal(h.state.lastApplyVerified,false);
+   assert.ok(h.logs.some(l=>l.stage==='qti'));
+ });
+}
+test('partial QTI on Spark keeps the matched answer and stops automatic fill',async()=>{
+ const h=setup(({state})=>{
+   state.architecture={adapterId:'ngl'};
+   state.questions.push({id:'q2',kind:'sorting',options:['A','B'],applyable:true});
+ });
+ let requests=0;
+ h.context.chrome.runtime.sendMessage=async()=>{requests++;return {ok:false};};
+ assert.equal(await h.context.runSolve(),false);
+ assert.equal(requests,0);
+ assert.equal(h.state.solved,false);
+ assert.equal(h.state.verifiedQti,false);
+ assert.deepEqual(Array.from(h.state.answers.keys()),['q1']);
+ const missing=h.logs.find(l=>l.stage==='QTI_INCOMPLETE').data.missing;
+ assert.deepEqual(Array.from(missing,q=>q.id),['q2']);
+});
 test('checkbox diagnostics omit answer text and arbitrary DOM result details',async()=>{
  const h=setup();await h.context.runSolve();const secret='synthetic-private-marker';
  h.context.sendFrame=async()=>({ok:true,result:[{id:'q1',status:'uncertain',reason:'VERIFY_FAILED',detail:secret,observed:secret,answer:secret}]});

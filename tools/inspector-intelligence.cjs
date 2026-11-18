@@ -8,6 +8,7 @@ const deep=require('./inspector-deep.cjs');
 const ROOT = path.resolve(__dirname, '..');
 const MAX_BYTES = 20 * 1024 * 1024;
 const KNOWN = [
+  {type:'os-sorting',re:/\bos-sorting\b/i,paths:['inspector-content.js (sorting tile and column state)'],capability:'Compare tile identifiers in each column before and after placement'},
   {type:'om-text-gap',re:/\bom-text-gap\b/i,paths:['content.js (word-pool scan/fill)','qti.js (gapMatchInteraction)'],capability:'QTI-bound word-pool mapping; verify target IDs and live state'},
   {type:'ic-text-correction',re:/\bic-text-correction\b/i,paths:['content.js (correction scan/fill)','qti.js (text correction)'],capability:'Word-position correction; live acceptance must be verified'},
   {type:'os-sequence',re:/\bos-sequence\b/i,paths:['content.js (sequence scan/fill)','qti.js (orderInteraction)'],capability:'Sequence inspection; actual drag support must be verified'},

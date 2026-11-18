@@ -61,6 +61,36 @@ function harness(options={}){
 test('content capture records nested accessible frames, bounded structured pool/target state and no raw HTML',()=>{
  const h=harness(),c=h.send('CAPTURE').result;assert.equal(c.deepSchema,1);assert.equal(c.frame.ancestry.length,2);assert.equal(c.frame.complete,true);assert.equal(c.deepInteractions[0].sources[0].text,'alpha');assert.equal(c.deepInteractions[0].destinations[0].occupancy.emptyClass,true);assert.equal(c.interactions[0].html,null);assert.equal(c.controls.length,0);
 });
+test('sorting traces identify tiles inside each column after a move',()=>{
+ const h=harness();
+ h.root.className='interaction os-sorting';
+ h.source.className='os-sorting-element';
+ h.source.children[0].className='draggable__handle';
+ h.gap.className='osSorting__category';
+ h.gap.add(new h.El('span','','osSorting__categoryTitle','Group A'));
+ const other=h.root.add(new h.El('div','g2','osSorting__category'));
+ other.add(new h.El('span','','osSorting__categoryTitle','Group B'));
+ h.root.children.splice(h.root.children.indexOf(h.source),1);
+ h.gap.add(h.source);
+ const capture=h.send('CAPTURE').result.deepInteractions[0];
+ assert.equal(capture.bounds.sourceTotal,1);
+ assert.equal(capture.bounds.destinationTotal,2);
+ assert.equal(capture.destinations[0].label,'Group A');
+ assert.deepEqual(Array.from(capture.destinations[0].occupancy.occupantIds),['s1']);
+ assert.equal(capture.destinations[1].occupancy.hasText,false);
+ h.send('TRACE_START');
+ h.listeners.click({type:'click',target:h.source.children[0]});
+ h.gap.children.splice(h.gap.children.indexOf(h.source),1);
+ other.add(h.source);
+ for(const t of h.timers.filter(t=>t.ms<2000))t.fn();
+ const events=h.send('TRACE_GET').result.events;
+ const before=events.find(e=>e.type==='action-before');
+ assert.equal(before.attribution.role,'source');
+ assert.ok(before.attribution.handle);
+ const after=events.find(e=>e.type==='action-after').afterState[0];
+ assert.deepEqual(Array.from(after.destinations,c=>c.occupancy.draggableCount),[0,1]);
+ assert.deepEqual(Array.from(after.destinations[1].occupancy.occupantIds),['s1']);
+});
 test('recorder captures before/async-after, class mutations, removed sources and replacement connectivity',()=>{
  const h=harness();h.send('TRACE_START');h.listeners.click({type:'click',target:h.source,isTrusted:false});h.gap.textContent='alpha';h.gap.className='om-text-gap__target-item filled';h.source.isConnected=false;
  h.observers[0].fn([{type:'childList',target:h.root,addedNodes:[],removedNodes:[h.source],attributeName:null,oldValue:null}]);
