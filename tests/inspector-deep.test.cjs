@@ -61,6 +61,26 @@ function harness(options={}){
 test('content capture records nested accessible frames, bounded structured pool/target state and no raw HTML',()=>{
  const h=harness(),c=h.send('CAPTURE').result;assert.equal(c.deepSchema,1);assert.equal(c.frame.ancestry.length,2);assert.equal(c.frame.complete,true);assert.equal(c.deepInteractions[0].sources[0].text,'alpha');assert.equal(c.deepInteractions[0].destinations[0].occupancy.emptyClass,true);assert.equal(c.interactions[0].html,null);assert.equal(c.controls.length,0);
 });
+test('sorting feedback is recorded only for a single visible, unambiguous mark',()=>{
+ const h=harness();
+ h.root.className='interaction os-sorting';
+ h.source.className='os-sorting-element';
+ const read=()=>h.send('CAPTURE').result.deepInteractions[0].sources[0].feedback;
+ assert.equal(read(),undefined);
+ const mark=h.source.add(new h.El('div','','check wrong'));
+ assert.equal(read(),'incorrect');
+ mark.className='check correct';
+ assert.equal(read(),'correct');
+ mark.className='check correct wrong';
+ assert.equal(read(),undefined);
+ mark.className='check correct';
+ const duplicate=h.source.add(new h.El('div','','check wrong'));
+ assert.equal(read(),undefined);
+ duplicate.getClientRects=()=>[];
+ assert.equal(read(),'correct');
+ mark.getClientRects=()=>[];
+ assert.equal(read(),undefined);
+});
 test('sorting traces identify tiles inside each column after a move',()=>{
  const h=harness();
  h.root.className='interaction os-sorting';
